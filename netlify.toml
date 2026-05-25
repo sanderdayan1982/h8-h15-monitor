@@ -1,0 +1,9 @@
+# Netlify configuration — FRED API proxy
+# Resolves the CORS limitation of the St. Louis Fed API by routing
+# requests through Netlify's edge, where CORS does not apply.
+
+[[redirects]]
+  from = "/fred-proxy/*"
+  to   = "https://api.stlouisfed.org/fred/:splat"
+  status = 200
+  force  = true

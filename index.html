@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>H.8 Banking & H.15 Rates Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e17;--card:#111827;--border:#1e2a3a;--t1:#e2e8f0;--t2:#8899aa;--t3:#556677;--green:#22c55e;--red:#ef4444;--cyan:#06b6d4;--amber:#f59e0b;--violet:#8b5cf6;--rose:#f43f5e;--orange:#f97316}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;line-height:1.5}
+.header{padding:1.4rem 2rem .8rem;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:.8rem}
+.header h1{font-size:1.3rem;font-weight:700;letter-spacing:-.02em}.header h1 span{color:var(--cyan)}
+.header-right{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--t2);background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.25rem .6rem}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:pulse 1.8s ease-in-out infinite}
+.dot.ok{background:var(--green)}.dot.err{background:var(--red);animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.tab-bar{display:flex;align-items:center;gap:0;padding:0 2rem;border-bottom:1px solid var(--border);overflow-x:auto}
+.tab-btn{padding:.7rem 1.2rem;font-size:.73rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:'DM Sans',sans-serif}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}.tab-btn:hover:not(.active){color:var(--t2)}
+.tab-content{display:none}.tab-content.active{display:block}
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.kpi{background:var(--bg);padding:.9rem 1.2rem}
+.kpi-label{font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);font-weight:600}
+.kpi-val{font-family:'JetBrains Mono',monospace;font-size:1.15rem;font-weight:600;margin-top:.1rem}
+.kpi-sub{font-size:.66rem;font-family:'JetBrains Mono',monospace;color:var(--t2)}
+.kpi-sub.pos{color:var(--green)}.kpi-sub.neg{color:var(--red)}.kpi-sub.watch{color:var(--amber)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem;padding:.8rem 2rem 1.5rem}
+.sec-hdr{padding:1rem 2rem .3rem;display:flex;align-items:center;gap:.5rem}
+.sec-dot{width:8px;height:8px;border-radius:2px}
+.sec-hdr h2{font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t2)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;position:relative;overflow:hidden;transition:border-color .2s}
+.card:hover{border-color:rgba(255,255,255,.08)}
+.card-title{font-size:.74rem;font-weight:600;line-height:1.3}
+.wrap{height:180px;position:relative}.card.tall .wrap{height:250px}
+.no-data{display:flex;align-items:center;justify-content:center;height:100%;color:var(--t3);font-size:.72rem;font-family:'JetBrains Mono',monospace}
+.alert-row{display:flex;align-items:center;gap:.6rem;padding:.45rem .6rem;border-radius:6px;margin-bottom:.35rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;border:1px solid var(--border)}
+.alert-row .label{flex:1;color:var(--t1)}.alert-row .value{color:var(--t2);min-width:70px;text-align:right}
+.alert-badge{padding:.15rem .5rem;border-radius:4px;font-size:.62rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.badge-safe{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.badge-watch{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.badge-critical{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.badge-neutral{background:rgba(136,153,170,.12);color:var(--t2);border:1px solid var(--border)}
+.htable{width:100%;border-collapse:collapse;font-size:.65rem;font-family:'JetBrains Mono',monospace}
+.htable th{background:var(--card);color:var(--t2);padding:.4rem .5rem;text-align:right;border-bottom:1px solid var(--border);position:sticky;top:0;font-weight:600}
+.htable th:first-child{text-align:left}
+.htable td{padding:.35rem .5rem;text-align:right;border-bottom:1px solid rgba(30,42,58,.5);color:var(--t1)}
+.htable td:first-child{text-align:left;color:var(--t2)}.htable td.pos{color:var(--green)}.htable td.neg{color:var(--red)}
+.htable-wrap{max-height:350px;overflow-y:auto;border:1px solid var(--border);border-radius:8px}
+.overview-signal{display:flex;align-items:center;gap:.8rem;padding:.7rem 2rem;font-family:'JetBrains Mono',monospace;border-bottom:1px solid var(--border)}
+.overview-signal .sig-icon{font-size:1.3rem}
+.overview-signal .sig-label{font-size:.76rem;font-weight:700}
+.overview-signal .sig-detail{font-size:.62rem;color:var(--t2)}
+.concept-box{background:rgba(6,182,212,.04);border:1px solid rgba(6,182,212,.15);border-radius:10px;padding:1rem;font-size:.68rem;line-height:1.7;color:var(--t2);font-family:'JetBrains Mono',monospace}
+.concept-box strong{color:var(--cyan)}.concept-box p{margin-bottom:.35rem}
+.src-badge{display:inline-flex;align-items:center;gap:.25rem;font-size:.55rem;font-family:'JetBrains Mono',monospace;color:var(--t3);background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:4px;padding:.12rem .35rem;margin-top:.2rem}
+.src-dot{width:5px;height:5px;border-radius:50%;display:inline-block}
+.src-dot.official{background:var(--cyan)}.src-dot.delayed{background:var(--amber)}
+.panel-link{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--cyan);background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.3rem .7rem;text-decoration:none;transition:all .15s}
+.panel-link:hover{background:var(--border);color:var(--t1)}
+.overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;transition:opacity .5s}
+.overlay.hide{opacity:0;pointer-events:none}
+.spin{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:sp .75s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.overlay p{margin-top:1rem;font-family:'JetBrains Mono',monospace;font-size:.76rem;color:var(--t2)}
+.err-box{margin:.8rem 2rem;padding:.6rem 1rem;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:.74rem;color:var(--red);display:none}.err-box.show{display:block}
+.footer{text-align:center;padding:1rem 2rem;font-size:.64rem;color:var(--t3);border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace}
+.log-toggle{position:fixed;bottom:1rem;right:1rem;background:var(--card);border:1px solid var(--border);color:var(--t2);font-size:.66rem;font-family:'JetBrains Mono',monospace;padding:.25rem .55rem;border-radius:6px;cursor:pointer;z-index:100}
+.log-panel{position:fixed;bottom:2.6rem;right:1rem;width:480px;max-height:320px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.6rem;font-size:.6rem;font-family:'JetBrains Mono',monospace;color:var(--t2);z-index:100;display:none;line-height:1.5}
+.log-panel.show{display:block}.log-panel .ok{color:var(--green)}.log-panel .warn{color:var(--amber)}.log-panel .fail{color:var(--red)}
+/* === OLA 2: Timestamp bar === */
+.ts-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.55rem 2rem;background:rgba(15,18,25,.6);border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.66rem;color:var(--t2);flex-wrap:wrap}
+.ts-bar .ts-group{display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap}
+.ts-bar .ts-item{display:flex;align-items:center;gap:.4rem}
+.ts-bar .ts-label{color:var(--t3);text-transform:uppercase;letter-spacing:.04em;font-size:.6rem}
+.ts-bar .ts-val{color:var(--t1);font-weight:600}
+.ts-age{display:inline-block;padding:.1rem .45rem;border-radius:4px;font-weight:700;font-size:.6rem}
+.ts-age.fresh{background:rgba(34,197,94,.15);color:var(--green)}
+.ts-age.stale{background:rgba(245,158,11,.18);color:var(--amber)}
+.ts-age.old{background:rgba(239,68,68,.18);color:var(--red)}
+/* === OLA 2: Spread overlay === */
+.spread-chart-wrap{position:relative}
+.spread-overlay{position:absolute;top:.8rem;right:1rem;background:rgba(10,14,21,.85);border:1px solid var(--border);border-radius:8px;padding:.5rem .9rem;font-family:'JetBrains Mono',monospace;text-align:right;backdrop-filter:blur(4px);z-index:5;pointer-events:none}
+.spread-overlay .spread-lbl{font-size:.58rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.15rem}
+.spread-overlay .spread-val{font-size:1.5rem;font-weight:700;line-height:1;letter-spacing:-.02em}
+.spread-overlay .spread-status{font-size:.6rem;font-weight:700;margin-top:.25rem;letter-spacing:.04em}
+.spread-overlay.normal .spread-val{color:var(--green)}
+.spread-overlay.normal .spread-status{color:var(--green)}
+.spread-overlay.inverted .spread-val{color:var(--red)}
+.spread-overlay.inverted .spread-status{color:var(--red)}
+.spread-overlay.flat .spread-val{color:var(--amber)}
+.spread-overlay.flat .spread-status{color:var(--amber)}
+@media(max-width:900px){.grid{grid-template-columns:1fr!important;padding:.5rem 1rem 1rem}.sec-hdr{padding:.7rem 1rem .2rem}.header{padding:.8rem 1rem}.tab-bar{padding:0 .5rem}.kpi-strip{grid-template-columns:repeat(2,1fr)}.log-panel{width:calc(100vw - 2rem)}.ts-bar{padding:.5rem 1rem;font-size:.62rem}.spread-overlay{position:static;margin:0 .5rem .8rem;text-align:left}}
+</style>
+</head>
+<body>
+<div class="overlay" id="ov"><div class="spin"></div><p id="ovTxt">Loading H.8 + H.15 series…</p></div>
+<header class="header"><div><h1>H.8 <span>Banking</span> & H.15 <span>Rates</span> Monitor</h1></div><div class="header-right"><a class="panel-link" href="Panel_1_H41_Liquidity.html" target="_blank">← H.4.1 Panel</a><div class="badge"><div class="dot" id="sDot"></div><span id="sTxt">Connecting…</span></div><div class="badge" id="seriesBadge">—/9</div></div></header>
+<nav class="tab-bar">
+<button class="tab-btn active" data-tab="h8">H.8 Banking</button>
+<button class="tab-btn" data-tab="h15">H.15 Rates</button>
+</nav>
+<!-- OLA 2: Timestamp bar -->
+<div class="ts-bar" id="tsBar">
+<div class="ts-group">
+<div class="ts-item"><span class="ts-label">Last loaded</span><span class="ts-val" id="tsLoaded">—</span></div>
+<div class="ts-item"><span class="ts-label">Most recent FRED data</span><span class="ts-val" id="tsRecent">—</span><span class="ts-age" id="tsAge">—</span></div>
+</div>
+<div class="ts-group">
+<div class="ts-item"><span class="ts-label" id="tsSeriesLabel">Series</span><span class="ts-val" id="tsSeries">—/9</span></div>
+</div>
+</div>
+<div class="err-box" id="errBox"></div>
+
+<!-- =================== H.8 TAB =================== -->
+<div class="tab-content active" id="tab-h8">
+<div class="overview-signal" id="h8Sig" style="background:rgba(136,153,170,.06)"><span class="sig-icon">⚪</span><div><div class="sig-label">H.8 Banking Signal: Loading…</div><div class="sig-detail">Waiting for data</div></div></div>
+<div class="kpi-strip" style="border-top:1px solid var(--border)">
+<div class="kpi"><span class="kpi-label">Bank Credit</span><div class="kpi-val" id="h8BC">—</div><div class="kpi-sub" id="h8BCd"></div><div class="src-badge"><span class="src-dot official"></span> FRED TOTBKCR · Weekly</div></div>
+<div class="kpi"><span class="kpi-label">Loans & Leases</span><div class="kpi-val" id="h8LL">—</div><div class="kpi-sub" id="h8LLd"></div></div>
+<div class="kpi"><span class="kpi-label">C&I Loans</span><div class="kpi-val" id="h8CI">—</div><div class="kpi-sub" id="h8CId"></div></div>
+<div class="kpi"><span class="kpi-label">Deposits</span><div class="kpi-val" id="h8DEP">—</div><div class="kpi-sub" id="h8DEPd"></div></div>
+<div class="kpi"><span class="kpi-label">Borrowings</span><div class="kpi-val" id="h8BOR">—</div><div class="kpi-sub" id="h8BORd"></div></div>
+</div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--red)"></div><h2>Alert Engine</h2></div>
+<div class="grid" style="grid-template-columns:1fr"><div class="card"><div id="h8Alerts">Loading…</div></div></div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--cyan)"></div><h2>Individual Series Charts</h2></div>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+<div class="card"><div class="card-title">Bank Credit (TOTBKCR)</div><div class="wrap" id="wrapH8BC"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">Loans & Leases (TOTLL)</div><div class="wrap" id="wrapH8LL"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">C&I Loans (BUSLOANS)</div><div class="wrap" id="wrapH8CI"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">Deposits (DPSACBW027SBOG)</div><div class="wrap" id="wrapH8DEP"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">Borrowings (TLBACBW027SBOG)</div><div class="wrap" id="wrapH8BOR"><div class="no-data">Loading…</div></div></div>
+</div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--violet)"></div><h2>Combined: Loans / Deposits / Borrowings</h2></div>
+<div class="grid" style="grid-template-columns:1fr"><div class="card tall"><div class="wrap" id="wrapH8Combo"><div class="no-data">Loading…</div></div></div></div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--amber)"></div><h2>Weekly Change Heatmap</h2></div>
+<div style="padding:0 2rem 1rem"><div class="htable-wrap" id="h8Heatmap" style="max-height:300px"><div class="no-data">Loading…</div></div></div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--green)"></div><h2>Concept Guide & Macro Interpretation</h2></div>
+<div style="padding:0 2rem 1.5rem"><div class="concept-box">
+<strong>What is H.8?</strong><p>Fed's weekly aggregate data on commercial bank assets & liabilities. Published Fridays 16:15 ET.</p>
+<strong>Series:</strong><p><strong>Bank Credit:</strong> Total credit = securities + loans. Rising = expansionary.</p><p><strong>Loans & Leases:</strong> Real-economy lending demand.</p><p><strong>C&I Loans:</strong> Business investment proxy. Leading indicator.</p><p><strong>Deposits:</strong> Funding base. Falling = funding stress.</p><p><strong>Borrowings:</strong> Fed/FHLB borrowings. Rising = banks under pressure.</p>
+<strong>Traffic Light:</strong><p>🟢 GREEN: Credit ↑, Loans ↑, Deposits ↑, Borrowings stable/↓</p><p>🟡 YELLOW: Mixed — deposits soft, borrowings creeping up</p><p>🔴 RED: Loans ↓, Deposits ↓, Borrowings ↑, C&I weak → recession risk</p>
+</div></div>
+</div>
+
+<!-- =================== H.15 TAB =================== -->
+<div class="tab-content" id="tab-h15">
+<div class="overview-signal" id="h15Sig" style="background:rgba(136,153,170,.06)"><span class="sig-icon">⚪</span><div><div class="sig-label">H.15 Rates Signal: Loading…</div><div class="sig-detail">Waiting for data</div></div></div>
+<div class="kpi-strip" style="border-top:1px solid var(--border)">
+<div class="kpi"><span class="kpi-label">Eff. Fed Funds</span><div class="kpi-val" id="h15FF">—</div><div class="kpi-sub" id="h15FFd"></div><div class="src-badge"><span class="src-dot delayed"></span> FRED DFF · Daily</div></div>
+<div class="kpi"><span class="kpi-label">3M T-Bill</span><div class="kpi-val" id="h15TB3">—</div><div class="kpi-sub" id="h15TB3d"></div></div>
+<div class="kpi"><span class="kpi-label">2Y Treasury</span><div class="kpi-val" id="h15T2Y">—</div><div class="kpi-sub" id="h15T2Yd"></div></div>
+<div class="kpi"><span class="kpi-label">10Y Treasury</span><div class="kpi-val" id="h15T10Y">—</div><div class="kpi-sub" id="h15T10Yd"></div></div>
+<div class="kpi"><span class="kpi-label">10Y−2Y Spread</span><div class="kpi-val" id="h15Sp102">—</div><div class="kpi-sub" id="h15Sp102d"></div></div>
+<div class="kpi"><span class="kpi-label">FF−3M Spread</span><div class="kpi-val" id="h15SpFF3">—</div><div class="kpi-sub" id="h15SpFF3d"></div></div>
+</div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--red)"></div><h2>Alert Engine</h2></div>
+<div class="grid" style="grid-template-columns:1fr"><div class="card"><div id="h15Alerts">Loading…</div></div></div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--cyan)"></div><h2>Rate Charts</h2></div>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+<div class="card"><div class="card-title">Effective Fed Funds Rate (DFF)</div><div class="wrap" id="wrapH15FF"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">3-Month T-Bill (DTB3)</div><div class="wrap" id="wrapH15TB3"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">2-Year Treasury (DGS2)</div><div class="wrap" id="wrapH15T2Y"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">10-Year Treasury (DGS10)</div><div class="wrap" id="wrapH15T10Y"><div class="no-data">Loading…</div></div></div>
+</div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--violet)"></div><h2>Spread Charts</h2></div>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+<div class="card"><div class="card-title">10Y − 2Y Spread (bps)</div><div class="spread-chart-wrap"><div class="spread-overlay" id="spreadOverlay" style="display:none"><div class="spread-lbl">10Y − 2Y</div><div class="spread-val" id="spreadOverlayVal">—</div><div class="spread-status" id="spreadOverlayStatus">—</div></div><div class="wrap" id="wrapH15Sp102"><div class="no-data">Loading…</div></div></div></div>
+<div class="card"><div class="card-title">Fed Funds − 3M Spread (bps)</div><div class="wrap" id="wrapH15SpFF3"><div class="no-data">Loading…</div></div></div>
+</div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--cyan)"></div><h2>All Rates Overlay</h2></div>
+<div class="grid" style="grid-template-columns:1fr"><div class="card"><div class="card-title">FF / 3M / 2Y / 10Y Overlay</div><div class="wrap" style="height:220px" id="wrapH15Over"><div class="no-data">Loading…</div></div></div></div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--amber)"></div><h2>Weekly Change Heatmap</h2></div>
+<div style="padding:0 2rem 1rem"><div class="htable-wrap" id="h15Heatmap" style="max-height:300px"><div class="no-data">Loading…</div></div></div>
+<div class="sec-hdr"><div class="sec-dot" style="background:var(--green)"></div><h2>Concept Guide & Macro Interpretation</h2></div>
+<div style="padding:0 2rem 1.5rem"><div class="concept-box">
+<strong>What is H.15?</strong><p>Fed daily yields on Treasuries and key rates.</p>
+<strong>Rates:</strong><p><strong>FF (DFF):</strong> Overnight interbank rate, set by FOMC.</p><p><strong>3M T-Bill (DTB3):</strong> Near-term expectations.</p><p><strong>2Y (DGS2):</strong> 1-2yr rate path expectations.</p><p><strong>10Y (DGS10):</strong> Long-term growth + inflation benchmark.</p>
+<strong>Spreads:</strong><p><strong>10Y-2Y:</strong> Negative = inverted = recession signal.</p><p><strong>FF-3M:</strong> If FF > 3M, market prices rate cuts.</p>
+<strong>Traffic Light:</strong><p>🟢 GREEN: Curve steepening, short-end easing</p><p>🟡 YELLOW: Near-zero spreads, transitional</p><p>🔴 RED: Deep inversion, FF well above 3M, restrictive</p>
+</div></div>
+</div>
+
+<footer class="footer">Source: Federal Reserve H.8 / H.15 via FRED API<br>H.8 = Weekly official release · H.15 = Delayed daily close · All data from FRED, NOT live</footer>
+<button class="log-toggle" onclick="document.getElementById('logP').classList.toggle('show')">📋 Log</button>
+<div class="log-panel" id="logP"></div>
+
+<script>
+
+var logEl=document.getElementById("logP");
+function log(m,c){logEl.innerHTML+='<div class="'+(c||"")+'">'+new Date().toLocaleTimeString()+' '+m+'</div>';}
+var FRED_KEY="88f866b4ec7048f2d00fff91b5fbee1c",FRED_BASE="/fred-proxy/series/observations";
+var CI=[];function destroyCharts(){CI.forEach(function(c){try{c.destroy();}catch(e){}});CI=[];}
+var H8={BC:[],LL:[],CI:[],DEP:[],BOR:[]},H15={FF:[],TB3:[],T2Y:[],T10Y:[]};
+
+document.querySelector(".tab-bar").addEventListener("click",function(e){var b=e.target;if(!b.classList.contains("tab-btn")||b.classList.contains("active"))return;document.querySelectorAll(".tab-btn").forEach(function(x){x.classList.remove("active");});document.querySelectorAll(".tab-content").forEach(function(x){x.classList.remove("active");});b.classList.add("active");document.getElementById("tab-"+b.getAttribute("data-tab")).classList.add("active");});
+
+function delay(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+async function fetchFRED(id,sd){
+  var url=FRED_BASE+"?series_id="+id+"&api_key="+FRED_KEY+"&file_type=json&sort_order=asc";
+  if(sd)url+="&observation_start="+sd;
+  log("FRED: "+id+"…");
+  for(var i=0;i<3;i++){
+    try{
+      var r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);
+      var j=await r.json();if(j.error_message)throw new Error(j.error_message);
+      var obs=(j.observations||[]).filter(function(o){return o.value!=="."&&o.value!=="";}).map(function(o){return{date:o.date,value:parseFloat(o.value)};});
+      if(!obs.length)throw new Error("Empty");
+      log("  ✓ "+id+": "+obs.length,"ok");return obs;
+    }catch(e){log("  ⚠ "+id+": "+e.message,"warn");if(i<2)await delay(2000+i*2000);}
+  }
+  log("  ✗ "+id+": FAILED","fail");return[];
+}
+
+function sd18(){var d=new Date();d.setMonth(d.getMonth()-18);return d.toISOString().slice(0,10);}
+function sd24(){var d=new Date();d.setMonth(d.getMonth()-24);return d.toISOString().slice(0,10);}
+
+async function loadAll(){
+  var sDot=document.getElementById("sDot"),sTxt=document.getElementById("sTxt"),errBox=document.getElementById("errBox");
+  try{
+    var sd=sd18(),ssd=sd24();
+    H8.BC=await fetchFRED("TOTBKCR",sd);await delay(300);
+    H8.LL=await fetchFRED("TOTLL",sd);await delay(300);
+    H8.CI=await fetchFRED("BUSLOANS",sd);await delay(300);
+    H8.DEP=await fetchFRED("DPSACBW027SBOG",sd);await delay(300);
+    H8.BOR=await fetchFRED("TLBACBW027SBOG",sd);await delay(300);
+    H15.FF=await fetchFRED("DFF",ssd);await delay(300);
+    H15.TB3=await fetchFRED("DTB3",ssd);await delay(300);
+    H15.T2Y=await fetchFRED("DGS2",ssd);await delay(300);
+    H15.T10Y=await fetchFRED("DGS10",ssd);
+    var ct=0;["BC","LL","CI","DEP","BOR"].forEach(function(k){if(H8[k].length)ct++;});
+    ["FF","TB3","T2Y","T10Y"].forEach(function(k){if(H15[k].length)ct++;});
+    document.getElementById("seriesBadge").textContent=ct+"/9";
+    document.getElementById("seriesBadge").style.color=ct>=8?"var(--green)":"var(--amber)";
+    /* OLA 2: update timestamp bar */
+    updateTimestampBar(ct);
+    destroyCharts();renderH8();renderH15();
+    sDot.className="dot ok";sTxt.textContent="Data loaded";errBox.classList.remove("show");log("Ready ✓","ok");
+  }catch(e){console.error(e);sDot.className="dot err";sTxt.textContent="Error";
+    errBox.innerHTML="<strong>Error:</strong> "+e.message;errBox.classList.add("show");}
+}
+
+/* OLA 2: Timestamp bar — show load time + most recent data + age badge */
+function updateTimestampBar(seriesLoaded){
+  /* Last loaded: current local time */
+  var now=new Date();
+  var loadedStr=now.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false});
+  document.getElementById("tsLoaded").textContent=loadedStr;
+  /* Most recent FRED data: find max date across all loaded series */
+  var maxDate=null;
+  ["BC","LL","CI","DEP","BOR"].forEach(function(k){if(H8[k].length){var d=H8[k][H8[k].length-1].date;if(!maxDate||d>maxDate)maxDate=d;}});
+  ["FF","TB3","T2Y","T10Y"].forEach(function(k){if(H15[k].length){var d=H15[k][H15[k].length-1].date;if(!maxDate||d>maxDate)maxDate=d;}});
+  if(maxDate){
+    var parts=maxDate.split("-");
+    var recentStr=fullDate(maxDate);
+    document.getElementById("tsRecent").textContent=recentStr;
+    /* Age in days */
+    var maxD=new Date(parts[0],parseInt(parts[1])-1,parts[2]);
+    var ageDays=Math.floor((now-maxD)/(1000*60*60*24));
+    var ageEl=document.getElementById("tsAge");
+    ageEl.textContent=ageDays+"d old";
+    ageEl.className="ts-age "+(ageDays<=7?"fresh":ageDays<=14?"stale":"old");
+  }else{
+    document.getElementById("tsRecent").textContent="no data";
+    document.getElementById("tsAge").textContent="—";
+  }
+  document.getElementById("tsSeries").textContent=seriesLoaded+"/9";
+  document.getElementById("tsSeries").style.color=seriesLoaded>=8?"var(--green)":seriesLoaded>=5?"var(--amber)":"var(--red)";
+}
+
+function last(a){return a&&a.length?a[a.length-1]:null;}
+function fmtPct(v){return(v>=0?"+":"")+v.toFixed(2)+"%";}
+function fullDate(d){var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],p=d.split("-");return M[parseInt(p[1])-1]+" "+parseInt(p[2])+" '"+p[0].slice(2);}
+var CD={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{mode:"index",intersect:false,titleFont:{family:"JetBrains Mono",size:11},bodyFont:{family:"JetBrains Mono",size:11}}},scales:{x:{grid:{color:"rgba(30,42,58,.5)"},ticks:{color:"#556677",font:{family:"JetBrains Mono",size:9},maxTicksLimit:8}},y:{beginAtZero:false,grace:"5%",grid:{color:"rgba(30,42,58,.5)"},ticks:{color:"#556677",font:{family:"JetBrains Mono",size:10}}}},elements:{point:{radius:0,hoverRadius:4},line:{tension:.3,borderWidth:2}}};
+function mc(wid,cfg){var w=document.getElementById(wid);if(!w)return;w.innerHTML='<canvas></canvas>';var m=JSON.parse(JSON.stringify(CD));if(cfg.options){if(cfg.options.plugins){if(cfg.options.plugins.annotation)m.plugins.annotation=cfg.options.plugins.annotation;if(cfg.options.plugins.legend)m.plugins.legend=cfg.options.plugins.legend;}if(cfg.options.scales)for(var s in cfg.options.scales)m.scales[s]=Object.assign(m.scales[s]||{},cfg.options.scales[s]);for(var k in cfg.options)if(k!=="plugins"&&k!=="scales")m[k]=cfg.options[k];}var ch=new Chart(w.querySelector("canvas").getContext("2d"),{type:cfg.type||"line",data:cfg.data,options:m});CI.push(ch);}
+
+function renderH8(){var names={BC:"Bank Credit",LL:"Loans & Leases",CI:"C&I Loans",DEP:"Deposits",BOR:"Borrowings"},colors={BC:"#06b6d4",LL:"#22c55e",CI:"#8b5cf6",DEP:"#f59e0b",BOR:"#f43f5e"},ids={BC:"h8BC",LL:"h8LL",CI:"h8CI",DEP:"h8DEP",BOR:"h8BOR"},dids={BC:"h8BCd",LL:"h8LLd",CI:"h8CId",DEP:"h8DEPd",BOR:"h8BORd"},wids={BC:"wrapH8BC",LL:"wrapH8LL",CI:"wrapH8CI",DEP:"wrapH8DEP",BOR:"wrapH8BOR"};
+var chgs={};
+for(var k in H8){var arr=H8[k],L=last(arr),P=arr.length>1?arr[arr.length-2]:null;if(L){document.getElementById(ids[k]).textContent="$"+(L.value/1000).toFixed(0)+"B";if(P){var chg=((L.value-P.value)/P.value)*100;chgs[k]=chg;var el=document.getElementById(dids[k]);el.textContent=fmtPct(chg)+" wk";el.className="kpi-sub "+(chg>0.05?"pos":chg<-0.05?"neg":"watch");}}if(arr.length)mc(wids[k],{data:{labels:arr.map(function(d){return fullDate(d.date);}),datasets:[{label:names[k],data:arr.map(function(d){return d.value/1000;}),borderColor:colors[k],backgroundColor:colors[k]+"14",fill:true}]},options:{scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(0)+"B";}}}}}});}
+if(H8.LL.length||H8.DEP.length||H8.BOR.length){var lM={},dM={},bM={};H8.LL.forEach(function(d){lM[d.date]=d.value;});H8.DEP.forEach(function(d){dM[d.date]=d.value;});H8.BOR.forEach(function(d){bM[d.date]=d.value;});var dateSet={};[lM,dM,bM].forEach(function(m){Object.keys(m).forEach(function(d){dateSet[d]=1;});});var ad=Object.keys(dateSet).sort();
+/* OLA 2: Base 100 normalization — each series normalized to its own first available data point */
+var lFirst=null,dFirst=null,bFirst=null;
+for(var k=0;k<ad.length;k++){if(lFirst===null&&lM[ad[k]])lFirst=lM[ad[k]];if(dFirst===null&&dM[ad[k]])dFirst=dM[ad[k]];if(bFirst===null&&bM[ad[k]])bFirst=bM[ad[k]];if(lFirst&&dFirst&&bFirst)break;}
+function norm(v,base){return v&&base?(v/base)*100:null;}
+mc("wrapH8Combo",{data:{labels:ad.map(fullDate),datasets:[{label:"Loans & Leases",data:ad.map(function(d){return norm(lM[d],lFirst);}),borderColor:"#22c55e",backgroundColor:"rgba(34,197,94,.05)",fill:false,spanGaps:true},{label:"Deposits",data:ad.map(function(d){return norm(dM[d],dFirst);}),borderColor:"#f59e0b",backgroundColor:"rgba(245,158,11,.05)",fill:false,spanGaps:true},{label:"Borrowings",data:ad.map(function(d){return norm(bM[d],bFirst);}),borderColor:"#f43f5e",backgroundColor:"rgba(244,63,94,.05)",fill:false,spanGaps:true}]},options:{plugins:{legend:{display:true,labels:{color:"#8899aa",font:{size:10,family:"JetBrains Mono"}}},tooltip:{callbacks:{label:function(ctx){if(ctx.parsed.y==null)return null;var delta=ctx.parsed.y-100;var sign=delta>=0?"+":"";return ctx.dataset.label+": "+ctx.parsed.y.toFixed(2)+" ("+sign+delta.toFixed(2)+"%)";}}},annotation:{annotations:{base:{type:"line",yMin:100,yMax:100,borderColor:"rgba(226,232,240,.35)",borderWidth:1,borderDash:[5,5],label:{enabled:true,content:"base 100",position:"end",backgroundColor:"rgba(0,0,0,.5)",color:"#94a3b8",font:{size:9,family:"JetBrains Mono"}}}}}},scales:{y:{beginAtZero:false,grace:"5%",ticks:{callback:function(v){return v.toFixed(0);}},title:{display:true,text:"Index (base 100 = "+(ad[0]?fullDate(ad[0]):"start")+")",color:"#8899aa",font:{family:"JetBrains Mono",size:10}}}}}});}
+/* Heatmap */
+/* OLA 2: Heatmap with Z-score (26-week rolling) — color reflects how unusual each weekly change is for that series, not arbitrary thresholds */
+var weeks=H8.BC.slice(-12);if(weeks.length>1){var hk=["BC","LL","CI","DEP","BOR"];
+/* Build full series of weekly % changes per ticker, for Z computation */
+var pctSeries={};hk.forEach(function(k2){var arr2=H8[k2];var s=[];for(var i=1;i<arr2.length;i++){if(arr2[i-1].value){s.push({date:arr2[i].date,pct:((arr2[i].value-arr2[i-1].value)/arr2[i-1].value)*100});}else{s.push({date:arr2[i].date,pct:null});}}pctSeries[k2]=s;});
+/* Helper: compute Z-score of pct[i] using last 26 weeks BEFORE i (not including i itself, to avoid lookahead) */
+function zAt(series,i){var W=26;var start=Math.max(0,i-W);var slice=series.slice(start,i).filter(function(x){return x.pct!=null;});if(slice.length<10)return null;var m=0;for(var j=0;j<slice.length;j++)m+=slice[j].pct;m/=slice.length;var sq=0;for(var j=0;j<slice.length;j++)sq+=(slice[j].pct-m)*(slice[j].pct-m);var sd=Math.sqrt(sq/slice.length);if(sd===0)return 0;return(series[i].pct-m)/sd;}
+function zColor(z){if(z==null)return{bg:"rgba(136,153,170,.08)",label:"insufficient history"};var az=Math.abs(z);if(az>2)return{bg:z>0?"rgba(34,197,94,.45)":"rgba(239,68,68,.45)",label:z>0?"extraordinary inject":"extraordinary drain"};if(az>1)return{bg:z>0?"rgba(34,197,94,.22)":"rgba(239,68,68,.22)",label:z>0?"notable inject":"notable drain"};return{bg:"rgba(136,153,170,.08)",label:"within normal range"};}
+var h='<table class="htable"><thead><tr><th>Date</th>';hk.forEach(function(k2){h+='<th>'+names[k2]+'</th>';});h+='</tr></thead><tbody>';
+for(var wi=1;wi<weeks.length;wi++){h+='<tr><td>'+weeks[wi].date+'</td>';
+hk.forEach(function(k2){var arr2=H8[k2],off=arr2.length-weeks.length;if(off+wi>0&&off+wi<arr2.length){var cur=arr2[off+wi],prev=arr2[off+wi-1];var pct=((cur.value-prev.value)/prev.value)*100;var idxInPct=off+wi-1;var z=zAt(pctSeries[k2],idxInPct);var zc=zColor(z);var zStr=z!=null?(z>=0?"+":"")+z.toFixed(2)+"σ":"n/a";var tip=fmtPct(pct)+" | Z: "+zStr+" | "+zc.label;h+='<td class="'+(pct>0?"pos":"neg")+'" style="background:'+zc.bg+'" title="'+tip+'">'+fmtPct(pct)+'</td>';}else h+='<td>—</td>';});
+h+='</tr>';}h+='</tbody></table>';
+document.getElementById("h8Heatmap").innerHTML=h;}
+/* Alerts */
+var bcC=chgs.BC||0,llC=chgs.LL||0,ciC=chgs.CI||0,depC=chgs.DEP||0,borC=chgs.BOR||0;
+var alerts=[{l:"Bank Credit",v:fmtPct(bcC),s:bcC>0?"EXPANDING":bcC<-0.1?"CONTRACTING":"FLAT"},{l:"Loans & Leases",v:fmtPct(llC),s:llC>0?"EXPANDING":llC<-0.1?"CONTRACTING":"FLAT"},{l:"C&I Loans",v:fmtPct(ciC),s:ciC>0?"EXPANDING":ciC<-0.1?"WEAK":"FLAT"},{l:"Deposits",v:fmtPct(depC),s:depC>0?"STABLE":depC<-0.1?"WEAKENING":"FLAT"},{l:"Borrowings",v:fmtPct(borC),s:borC<0?"FALLING":borC>0.5?"RISING FAST":"STABLE"}];
+var ah='';alerts.forEach(function(a){var cls=["EXPANDING","STABLE","FALLING"].indexOf(a.s)!==-1?"badge-safe":["CONTRACTING","WEAK","WEAKENING","RISING FAST"].indexOf(a.s)!==-1?"badge-critical":"badge-watch";ah+='<div class="alert-row"><span class="label">'+a.l+'</span><span class="value">'+a.v+'</span><span class="alert-badge '+cls+'">'+a.s+'</span></div>';});document.getElementById("h8Alerts").innerHTML=ah;
+/* Signal */
+var red=0,grn=0;if(llC>0)grn++;else if(llC<-0.1)red++;if(depC>0)grn++;else if(depC<-0.1)red++;if(borC<0)grn++;else if(borC>0.5)red++;if(ciC<-0.1)red++;else if(ciC>0)grn++;if(bcC>0)grn++;
+var sc,si,st,sd2;if(red>=3){sc="var(--red)";si="🔴";st="H.8: RED — Credit Contraction";sd2="Loans weakening, deposits pressured, borrowings elevated";}else if(grn>=3){sc="var(--green)";si="🟢";st="H.8: GREEN — Healthy Transmission";sd2="Credit expanding, deposits stable, borrowings contained";}else{sc="var(--amber)";si="🟡";st="H.8: YELLOW — Mixed Conditions";sd2="Some series diverging — watch direction";}
+var el=document.getElementById("h8Sig");el.style.background=sc+"11";el.style.borderBottom="1px solid "+sc+"44";el.innerHTML='<span class="sig-icon">'+si+'</span><div><div class="sig-label" style="color:'+sc+'">'+st+'</div><div class="sig-detail">'+sd2+'</div></div>';}
+
+function renderH15(){var rM={FF:H15.FF,TB3:H15.TB3,T2Y:H15.T2Y,T10Y:H15.T10Y},rN={FF:"Fed Funds",TB3:"3M T-Bill",T2Y:"2Y Treasury",T10Y:"10Y Treasury"},rC={FF:"#06b6d4",TB3:"#22c55e",T2Y:"#f59e0b",T10Y:"#f43f5e"},rI={FF:"h15FF",TB3:"h15TB3",T2Y:"h15T2Y",T10Y:"h15T10Y"},rD={FF:"h15FFd",TB3:"h15TB3d",T2Y:"h15T2Yd",T10Y:"h15T10Yd"},rW={FF:"wrapH15FF",TB3:"wrapH15TB3",T2Y:"wrapH15T2Y",T10Y:"wrapH15T10Y"};
+for(var k in rM){var arr=rM[k],L=last(arr),P=arr.length>1?arr[arr.length-2]:null;if(L){document.getElementById(rI[k]).textContent=L.value.toFixed(2)+"%";if(P){var chg=(L.value-P.value)*100;var el=document.getElementById(rD[k]);el.textContent=(chg>=0?"+":"")+chg.toFixed(0)+" bps";el.className="kpi-sub "+(chg>0?"neg":chg<0?"pos":"watch");}}if(arr.length)mc(rW[k],{data:{labels:arr.map(function(d){return fullDate(d.date);}),datasets:[{label:rN[k],data:arr.map(function(d){return d.value;}),borderColor:rC[k],backgroundColor:rC[k]+"14",fill:true}]},options:{scales:{y:{ticks:{callback:function(v){return v.toFixed(2)+"%";}}}}}});}
+var t10L=last(H15.T10Y),t2L=last(H15.T2Y),ffL=last(H15.FF),tb3L=last(H15.TB3);
+if(t10L&&t2L){var sp=(t10L.value-t2L.value)*100;document.getElementById("h15Sp102").textContent=sp.toFixed(0)+" bps";var t10P=H15.T10Y.length>1?H15.T10Y[H15.T10Y.length-2]:null,t2P=H15.T2Y.length>1?H15.T2Y[H15.T2Y.length-2]:null;if(t10P&&t2P){var ps=(t10P.value-t2P.value)*100;var el2=document.getElementById("h15Sp102d");el2.textContent=(sp>ps?"+":"")+(sp-ps).toFixed(0)+" bps";el2.className="kpi-sub "+(sp>ps?"pos":"neg");}}
+if(ffL&&tb3L){var sp2=(ffL.value-tb3L.value)*100;document.getElementById("h15SpFF3").textContent=sp2.toFixed(0)+" bps";var ffP=H15.FF.length>1?H15.FF[H15.FF.length-2]:null,tb3P=H15.TB3.length>1?H15.TB3[H15.TB3.length-2]:null;if(ffP&&tb3P){var ps2=(ffP.value-tb3P.value)*100;var el3=document.getElementById("h15SpFF3d");el3.textContent=(sp2>ps2?"+":"")+(sp2-ps2).toFixed(0)+" bps";el3.className="kpi-sub "+(sp2>ps2?"neg":"pos");}}
+/* Spread charts */
+if(H15.T10Y.length&&H15.T2Y.length){var t10M={},t2M={};H15.T10Y.forEach(function(d){t10M[d.date]=d.value;});H15.T2Y.forEach(function(d){t2M[d.date]=d.value;});var spD=Object.keys(t10M).filter(function(d){return t2M[d];}).sort();var spVals=spD.map(function(d){return(t10M[d]-t2M[d])*100;});var spPos=spVals.map(function(v){return v>=0?v:null;});var spNeg=spVals.map(function(v){return v<0?v:null;});mc("wrapH15Sp102",{data:{labels:spD.map(fullDate),datasets:[{label:"10Y-2Y (normal)",data:spPos,borderColor:"#8b5cf6",backgroundColor:"rgba(139,92,246,.18)",fill:"origin",spanGaps:false,pointRadius:0},{label:"10Y-2Y (inverted)",data:spNeg,borderColor:"#ef4444",backgroundColor:"rgba(239,68,68,.25)",fill:"origin",spanGaps:false,pointRadius:0}]},options:{plugins:{legend:{display:false},annotation:{annotations:{z:{type:"line",yMin:0,yMax:0,borderColor:"#ef4444",borderWidth:2,label:{enabled:false}}}}},scales:{y:{ticks:{callback:function(v){return v+" bps";}}}}}});var lastSp=spVals[spVals.length-1];if(lastSp!==undefined){var ov=document.getElementById("spreadOverlay");var ovVal=document.getElementById("spreadOverlayVal");var ovSt=document.getElementById("spreadOverlayStatus");ov.style.display="block";ovVal.textContent=(lastSp>=0?"+":"")+lastSp.toFixed(0)+" bps";ov.className="spread-overlay";if(lastSp<0){ov.classList.add("inverted");ovSt.textContent=lastSp<-50?"⚠ DEEP INVERSION":"⚠ INVERTED";}else if(lastSp<25){ov.classList.add("flat");ovSt.textContent="⚡ FLAT CURVE";}else{ov.classList.add("normal");ovSt.textContent="✓ STEEPENING";}}}
+if(H15.FF.length&&H15.TB3.length){var fM={},tM={};H15.FF.forEach(function(d){fM[d.date]=d.value;});H15.TB3.forEach(function(d){tM[d.date]=d.value;});var spD2=Object.keys(fM).filter(function(d){return tM[d];}).sort();mc("wrapH15SpFF3",{data:{labels:spD2.map(fullDate),datasets:[{label:"FF-3M",data:spD2.map(function(d){return(fM[d]-tM[d])*100;}),borderColor:"#f97316",backgroundColor:"rgba(249,115,22,.08)",fill:true}]},options:{plugins:{annotation:{annotations:{z:{type:"line",yMin:0,yMax:0,borderColor:"rgba(239,68,68,.5)",borderDash:[4,4],borderWidth:1}}}},scales:{y:{ticks:{callback:function(v){return v+" bps";}}}}}});}
+/* Overlay — use all dates from any H.15 series */
+var allDatesSet={};[H15.FF,H15.TB3,H15.T2Y,H15.T10Y].forEach(function(s){s.forEach(function(d){allDatesSet[d.date]=1;});});
+var ovDates=Object.keys(allDatesSet).sort();
+if(ovDates.length>0){
+  var oFF={},oTB={},o2Y={},o10Y={};
+  H15.FF.forEach(function(d){oFF[d.date]=d.value;});H15.TB3.forEach(function(d){oTB[d.date]=d.value;});H15.T2Y.forEach(function(d){o2Y[d.date]=d.value;});H15.T10Y.forEach(function(d){o10Y[d.date]=d.value;});
+  mc("wrapH15Over",{data:{labels:ovDates.map(fullDate),datasets:[
+    {label:"Fed Funds",data:ovDates.map(function(d){return oFF[d]||null;}),borderColor:"#06b6d4",fill:false,spanGaps:true},
+    {label:"3M T-Bill",data:ovDates.map(function(d){return oTB[d]||null;}),borderColor:"#22c55e",fill:false,spanGaps:true},
+    {label:"2Y Treasury",data:ovDates.map(function(d){return o2Y[d]||null;}),borderColor:"#f59e0b",fill:false,spanGaps:true},
+    {label:"10Y Treasury",data:ovDates.map(function(d){return o10Y[d]||null;}),borderColor:"#f43f5e",fill:false,spanGaps:true}
+  ]},options:{plugins:{legend:{display:true,labels:{color:"#8899aa",font:{size:10,family:"JetBrains Mono"}}}},scales:{y:{ticks:{callback:function(v){return v.toFixed(2)+"%";}}}}}});
+}
+/* Heatmap */
+var hw=H15.FF.slice(-10);if(hw.length>1){var fM3={},tM3={},t2M3={},t10M3={};H15.FF.forEach(function(d){fM3[d.date]=d.value;});H15.TB3.forEach(function(d){tM3[d.date]=d.value;});H15.T2Y.forEach(function(d){t2M3[d.date]=d.value;});H15.T10Y.forEach(function(d){t10M3[d.date]=d.value;});var h='<table class="htable"><thead><tr><th>Date</th><th>FF</th><th>3M</th><th>2Y</th><th>10Y</th><th>10Y-2Y</th><th>FF-3M</th></tr></thead><tbody>';hw.forEach(function(w){var d=w.date,f=fM3[d],t=tM3[d],t2=t2M3[d],t10=t10M3[d];var s1=t10&&t2?((t10-t2)*100).toFixed(0):"—";var s2=f&&t?((f-t)*100).toFixed(0):"—";h+='<tr><td>'+d+'</td><td>'+(f?f.toFixed(2):"—")+'</td><td>'+(t?t.toFixed(2):"—")+'</td><td>'+(t2?t2.toFixed(2):"—")+'</td><td>'+(t10?t10.toFixed(2):"—")+'</td><td class="'+(s1!=="—"&&parseFloat(s1)<0?"neg":"pos")+'">'+s1+'</td><td class="'+(s2!=="—"&&parseFloat(s2)>20?"neg":"pos")+'">'+s2+'</td></tr>';});h+='</tbody></table>';document.getElementById("h15Heatmap").innerHTML=h;}
+/* Alerts */
+var h15a=[];var sp102v=t10L&&t2L?(t10L.value-t2L.value)*100:0;var spFF3v=ffL&&tb3L?(ffL.value-tb3L.value)*100:0;
+h15a.push({l:"10Y-2Y Spread",v:sp102v.toFixed(0)+" bps",s:sp102v<-50?"DEEP INVERSION":sp102v<0?"INVERTED":sp102v<50?"FLAT":"STEEPENING"});
+h15a.push({l:"FF-3M Spread",v:spFF3v.toFixed(0)+" bps",s:spFF3v>30?"TIGHT":spFF3v>10?"ELEVATED":"NORMAL"});
+if(ffL)h15a.push({l:"Fed Funds Rate",v:ffL.value.toFixed(2)+"%",s:ffL.value>5?"RESTRICTIVE":ffL.value>3?"ELEVATED":"ACCOMMODATIVE"});
+var ah2='';h15a.forEach(function(a){var cls=["STEEPENING","NORMAL","ACCOMMODATIVE"].indexOf(a.s)!==-1?"badge-safe":["FLAT","ELEVATED"].indexOf(a.s)!==-1?"badge-watch":"badge-critical";ah2+='<div class="alert-row"><span class="label">'+a.l+'</span><span class="value">'+a.v+'</span><span class="alert-badge '+cls+'">'+a.s+'</span></div>';});document.getElementById("h15Alerts").innerHTML=ah2;
+/* Signal */
+var hc,hi,ht,hd;if(sp102v<-20&&spFF3v>20){hc="var(--red)";hi="🔴";ht="H.15: RED — Restrictive Backdrop";hd="Deep inversion, short-end tight";}else if(sp102v>0&&spFF3v<10){hc="var(--green)";hi="🟢";ht="H.15: GREEN — Curve Improving";hd="Curve normalizing, easing";}else{hc="var(--amber)";hi="🟡";ht="H.15: YELLOW — Mixed / Transitional";hd="Curve signals mixed";}
+var sel=document.getElementById("h15Sig");sel.style.background=hc+"11";sel.style.borderBottom="1px solid "+hc+"44";sel.innerHTML='<span class="sig-icon">'+hi+'</span><div><div class="sig-label" style="color:'+hc+'">'+ht+'</div><div class="sig-detail">'+hd+'</div></div>';}
+
+(async function(){var ov=document.getElementById("ov");await loadAll();ov.classList.add("hide");setTimeout(function(){ov.remove();},600);})();
+</script>
+</body>
+</html>
