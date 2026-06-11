@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USD Liquidity Command Center — H.4.1</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#090d13;--card:#0e141f;--border:#1c2638;
+  --t1:#e2e8f0;--t2:#8899aa;--t3:#556677;
+  --green:#22c55e;--red:#ef4444;--cyan:#fdb813;--gold:#fdb813;
+  --amber:#f59e0b;--violet:#8b5cf6;--rose:#f43f5e;
+  --orange:#f97316;
+}
+body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;line-height:1.5}
+.mono{font-family:'JetBrains Mono',monospace}
+
+/* Header */
+.header{padding:1.4rem 2rem .8rem;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:.8rem}
+.header h1{font-size:1.3rem;font-weight:700;letter-spacing:-.02em}
+.header h1 span{color:var(--cyan)}
+.header-meta{font-size:.72rem;color:var(--t2);margin-top:.15rem;font-family:'JetBrains Mono',monospace}
+.header-right{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--t2);background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.25rem .6rem}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:pulse 1.8s ease-in-out infinite}
+.dot.ok{background:var(--green)}.dot.err{background:var(--red);animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* Tabs */
+.tab-bar{display:flex;align-items:center;gap:0;padding:0 2rem;border-bottom:1px solid var(--border);overflow-x:auto}
+.tab-btn{padding:.7rem 1.2rem;font-size:.73rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:'IBM Plex Sans Condensed',sans-serif}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab-btn:hover:not(.active){color:var(--t2)}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* KPIs */
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.kpi{background:var(--bg);padding:.9rem 1.2rem}
+.kpi-label{font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);font-weight:600}
+.kpi-val{font-family:'JetBrains Mono',monospace;font-size:1.2rem;font-weight:600;margin-top:.1rem}
+.kpi-sub{font-size:.66rem;font-family:'JetBrains Mono',monospace;color:var(--t2)}
+.kpi-sub.pos{color:var(--green)}.kpi-sub.neg{color:var(--red)}.kpi-sub.watch{color:var(--amber)}
+
+/* Grid / Cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem;padding:.8rem 2rem 1.5rem}
+.grid-2x1{grid-template-columns:2fr 1fr}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.sec-hdr{padding:1rem 2rem .3rem;display:flex;align-items:center;gap:.5rem}
+.sec-dot{width:8px;height:8px;border-radius:2px}
+.sec-hdr h2{font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t2)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;position:relative;overflow:hidden;transition:border-color .2s}
+.card:hover{border-color:rgba(255,255,255,.08)}
+.card-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem}
+.card-title{font-size:.74rem;font-weight:600;line-height:1.3}
+.card-sub{font-size:.62rem;color:var(--t3);margin-top:.06rem;font-family:'JetBrains Mono',monospace}
+.card-val{text-align:right;font-family:'JetBrains Mono',monospace}
+.card-val .v{font-size:.88rem;font-weight:600}
+.card-val .u{font-size:.58rem;color:var(--t3)}
+.card.wide{grid-column:1/-1}
+.wrap{height:180px;position:relative}
+.card.tall .wrap{height:250px}
+.no-data{display:flex;align-items:center;justify-content:center;height:100%;color:var(--t3);font-size:.72rem;font-family:'JetBrains Mono',monospace}
+
+/* Alert Panel */
+.alert-row{display:flex;align-items:center;gap:.6rem;padding:.45rem .6rem;border-radius:6px;margin-bottom:.35rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;border:1px solid var(--border)}
+.alert-row .label{flex:1;color:var(--t1)}
+.alert-row .value{color:var(--t2);min-width:70px;text-align:right}
+.alert-badge{padding:.15rem .5rem;border-radius:4px;font-size:.62rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.badge-safe{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.badge-watch{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.badge-critical{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.badge-neutral{background:rgba(136,153,170,.12);color:var(--t2);border:1px solid var(--border)}
+.badge-drain{background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)}
+
+/* Historical Table */
+.htable{width:100%;border-collapse:collapse;font-size:.65rem;font-family:'JetBrains Mono',monospace}
+.htable th{background:var(--card);color:var(--t2);padding:.4rem .5rem;text-align:right;border-bottom:1px solid var(--border);position:sticky;top:0;font-weight:600}
+.htable th:first-child{text-align:left}
+.htable td{padding:.35rem .5rem;text-align:right;border-bottom:1px solid rgba(28,38,56,.5);color:var(--t1)}
+.htable td:first-child{text-align:left;color:var(--t2)}
+.htable td.pos{color:var(--green)}.htable td.neg{color:var(--red)}.htable td.latest{background:rgba(253,184,19,.08)}
+.htable-wrap{max-height:350px;overflow-y:auto;border:1px solid var(--border);border-radius:8px}
+
+/* Publication Calendar */
+.pub-cal{font-family:'JetBrains Mono',monospace;font-size:.72rem}
+.pub-cal .next{color:var(--cyan);font-weight:600;margin-bottom:.3rem}
+.pub-cal .window{display:inline-block;background:var(--red);color:#fff;padding:.2rem .6rem;border-radius:4px;font-size:.64rem;font-weight:700;margin-top:.3rem}
+
+/* Signal Matrix */
+.signal-box{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.signal-cell{border-radius:6px;padding:.6rem;text-align:center;font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:700}
+
+/* Loader */
+.overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;transition:opacity .5s}
+.overlay.hide{opacity:0;pointer-events:none}
+.spin{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:sp .75s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.overlay p{margin-top:1rem;font-family:'JetBrains Mono',monospace;font-size:.76rem;color:var(--t2)}
+.err-box{margin:.8rem 2rem;padding:.6rem 1rem;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:.74rem;color:var(--red);display:none}
+.err-box.show{display:block}
+.err-box code{background:#1e222d;padding:2px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--cyan);user-select:all}
+
+/* Log */
+.log-toggle{position:fixed;bottom:1rem;right:1rem;background:var(--card);border:1px solid var(--border);color:var(--t2);font-size:.66rem;font-family:'JetBrains Mono',monospace;padding:.25rem .55rem;border-radius:6px;cursor:pointer;z-index:100}
+.log-panel{position:fixed;bottom:2.6rem;right:1rem;width:480px;max-height:320px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.6rem;font-size:.6rem;font-family:'JetBrains Mono',monospace;color:var(--t2);z-index:100;display:none;line-height:1.5}
+.log-panel.show{display:block}
+.log-panel .ok{color:var(--green)}.log-panel .warn{color:var(--amber)}.log-panel .fail{color:var(--red)}
+
+.footer{text-align:center;padding:1rem 2rem;font-size:.64rem;color:var(--t3);border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace}
+
+@media(max-width:900px){
+  .grid,.grid-2x1,.grid-3{grid-template-columns:1fr!important;padding:.5rem 1rem 1rem}
+  .sec-hdr{padding:.7rem 1rem .2rem}
+  .header{padding:.8rem 1rem}
+  .tab-bar{padding:0 .5rem}
+  .kpi-strip{grid-template-columns:repeat(2,1fr)}
+  .log-panel{width:calc(100vw - 2rem)}
+}
+</style>
+</head>
+<body>
+
+<div class="overlay" id="ov">
+  <div class="spin"></div>
+  <p id="ovTxt">Connecting via serverless proxy…</p>
+</div>
+
+<header class="header">
+  <div>
+    <h1>USD <span>Liquidity</span> Command Center — H.4.1</h1>
+    <p class="header-meta">
+      <span id="clockWAT">--:-- WAT</span> · <span id="clockET">--:-- ET</span> · Next H.4.1: <span id="countdown">—</span>
+    </p>
+  </div>
+  <div class="header-right">
+    <a href="/" target="_blank" style="font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--gold);text-decoration:none;border:1px solid var(--border);border-radius:6px;padding:.25rem .6rem;background:var(--card)">H.8/H.15 Monitor →</a>
+    <div class="badge"><div class="dot" id="sDot"></div><span id="sTxt">Connecting…</span></div>
+    <div class="badge">Release: <strong style="color:var(--t1);margin-left:3px">Thu 16:30 ET</strong></div>
+  </div>
+</header>
+
+<div class="kpi-strip">
+  <div class="kpi"><span class="kpi-label">Fed Net Liquidity</span><div class="kpi-val" id="kNL">—</div><div class="kpi-sub" id="kNLd"></div></div>
+  <div class="kpi"><span class="kpi-label">Reserve Balances</span><div class="kpi-val" id="kRB">—</div><div class="kpi-sub" id="kRBd"></div></div>
+  <div class="kpi"><span class="kpi-label">SOFR − IORB Spread</span><div class="kpi-val" id="kSP">—</div><div class="kpi-sub" id="kSPd"></div></div>
+  <div class="kpi"><span class="kpi-label">TGA Balance</span><div class="kpi-val" id="kTGA">—</div><div class="kpi-sub" id="kTGAd"></div></div>
+</div>
+
+<nav class="tab-bar">
+  <button class="tab-btn active" data-tab="main">Main Overview</button>
+  <button class="tab-btn" data-tab="assets">Assets Tracker</button>
+  <button class="tab-btn" data-tab="drains">Drains Tracker</button>
+  <button class="tab-btn" data-tab="alerts">Alerts &amp; Limits</button>
+  <button class="tab-btn" data-tab="history">Historical Records</button>
+</nav>
+
+<div class="err-box" id="errBox"></div>
+
+<!-- ════════════ TAB 1: MAIN OVERVIEW ════════════ -->
+<div class="tab-content active" id="tab-main">
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--cyan)"></div><h2>Net Liquidity Overview</h2></div>
+  <div class="grid grid-2x1">
+    <div class="card tall">
+      <div class="card-hdr"><div><div class="card-title">Fed Net Liquidity (WALCL − TGA − RRP)</div><div class="card-sub">Weekly · Jan 2024 → Present</div></div><div class="card-val"><span class="v" id="nlVal">—</span><br><span class="u">USD Billions</span></div></div>
+      <div class="wrap" id="wrapNL"><div class="no-data">Loading…</div></div>
+    </div>
+    <div>
+      <!-- Alert Panel -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title" style="margin-bottom:.7rem;color:var(--red)">🚨 ALERT PANEL</div>
+        <div id="alertPanel">Loading…</div>
+      </div>
+      <!-- Quick Status Badges -->
+      <div class="card" id="quickBadges">
+        <div class="card-title" style="margin-bottom:.6rem">Live Status</div>
+        <div id="statusBadges"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--amber)"></div><h2>Stress &amp; Reserve Indicators</h2></div>
+  <div class="grid grid-3">
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">Reserve Balances (WRESBAL)</div><div class="card-sub">Danger: &lt;3.0T · Crisis: &lt;2.5T</div></div><div class="card-val"><span class="v" id="rbVal">—</span></div></div>
+      <div class="wrap" id="wrapRB"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">SOFR − IORB Stress Spread</div><div class="card-sub">0-5 Safe · 15-30 Stress · &gt;30 Crisis</div></div><div class="card-val"><span class="v" id="spVal">—</span></div></div>
+      <div class="wrap" id="wrapSP"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">Weekly Net Liquidity Δ%</div><div class="card-sub">≥+2% Risk-On · ≤−2% Risk-Off</div></div><div class="card-val"><span class="v" id="wkVal">—</span></div></div>
+      <div class="wrap" id="wrapWK"><div class="no-data">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ TAB 2: ASSETS TRACKER ════════════ -->
+<div class="tab-content" id="tab-assets">
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--cyan)"></div><h2>Assets Tracker — QT/QE Monitor</h2></div>
+  <div class="grid" style="grid-template-columns:1fr 1fr">
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">WALCL — Total Fed Assets</div><div class="card-sub">QE ↑ / QT ↓</div></div><div class="card-val"><span class="v" id="waVal">—</span></div></div>
+      <div class="wrap" id="wrapWA"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">U.S. Treasury Securities (TREAST)</div><div class="card-sub">QT Pace in Sovereign Debt</div></div><div class="card-val"><span class="v" id="trVal">—</span></div></div>
+      <div class="wrap" id="wrapTR"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">Mortgage-Backed Securities (MBST)</div><div class="card-sub">Housing Support — QT Moderado</div></div><div class="card-val"><span class="v" id="mbVal">—</span></div></div>
+      <div class="wrap" id="wrapMB"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">Loans — Primary Credit (WLCFLPCL)</div><div class="card-sub">🔺 STRESS MONITOR · +20% wk = CRISIS</div></div><div class="card-val"><span class="v" id="pcVal">—</span></div></div>
+      <div class="wrap" id="wrapPC"><div class="no-data">Loading…</div></div>
+    </div>
+  </div>
+
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--green)"></div><h2>Weekly Record — Assets</h2></div>
+  <div style="padding:0 2rem 1.5rem">
+    <div class="htable-wrap" id="assetsTableWrap"><div class="no-data" style="padding:2rem">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ════════════ TAB 3: DRAINS TRACKER ════════════ -->
+<div class="tab-content" id="tab-drains">
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--orange)"></div><h2>Drains Tracker — Liquidity Outflows</h2></div>
+  <div class="grid grid-3">
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">TGA — Treasury General Account</div><div class="card-sub">Alto = Drena · Bajo = Inyecta</div></div><div class="card-val"><span class="v" id="tgaChVal">—</span></div></div>
+      <div class="wrap" id="wrapTGA"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">ON RRP (RRPONTTLD)</div><div class="card-sub">$200B rebound = SIGNAL</div></div><div class="card-val"><span class="v" id="rrpVal">—</span></div></div>
+      <div class="wrap" id="wrapRRP"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div><div class="card-title">Reserve Balances (WRESBAL)</div><div class="card-sub">$3.0T Warning · $2.5T Crisis</div></div><div class="card-val"><span class="v" id="rbVal2">—</span></div></div>
+      <div class="wrap" id="wrapRB2"><div class="no-data">Loading…</div></div>
+    </div>
+  </div>
+
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--violet)"></div><h2>Stacked Active Drains: TGA + ON RRP</h2></div>
+  <div class="grid" style="grid-template-columns:1fr">
+    <div class="card tall">
+      <div class="wrap" id="wrapDrains"><div class="no-data">Loading…</div></div>
+    </div>
+  </div>
+
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--rose)"></div><h2>SOFR−IORB Stress Spread Monitor</h2></div>
+  <div class="grid" style="grid-template-columns:2fr 1fr">
+    <div class="card">
+      <div class="wrap" id="wrapSPfull"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:.5rem">Spread History Table</div>
+      <div class="htable-wrap" id="spreadTableWrap" style="max-height:220px"><div class="no-data">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ TAB 4: ALERTS & LIMITS ════════════ -->
+<div class="tab-content" id="tab-alerts">
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--red)"></div><h2>Tabla de Límites y Niveles de Alerta Críticos</h2></div>
+  <div class="grid grid-2x1">
+    <div class="card">
+      <div class="htable-wrap" id="alertsTableWrap" style="max-height:420px"><div class="no-data">Loading…</div></div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title" style="margin-bottom:.6rem">🎯 Forex Signal Matrix</div>
+        <div class="signal-box" id="signalMatrix"></div>
+      </div>
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title" style="margin-bottom:.5rem">SOFR−IORB Speedometer</div>
+        <div id="speedometer" style="text-align:center;padding:.5rem 0"></div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:.5rem">📅 Publication Schedule</div>
+        <div class="pub-cal" id="pubCal"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--amber)"></div><h2>Leyenda Completa de Parámetros</h2></div>
+  <div style="padding:0 2rem 1.5rem">
+    <div class="htable-wrap" id="legendTableWrap"><div class="no-data">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ════════════ TAB 5: HISTORICAL RECORDS ════════════ -->
+<div class="tab-content" id="tab-history">
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--cyan)"></div><h2>Historical Records — Weekly Data Since Jan 2024</h2></div>
+  <div style="padding:0 2rem 1rem">
+    <div class="htable-wrap" id="historyTableWrap" style="max-height:400px"><div class="no-data">Loading…</div></div>
+  </div>
+
+  <div class="sec-hdr"><div class="sec-dot" style="background:var(--green)"></div><h2>Net Liquidity Weekly Change % History</h2></div>
+  <div class="grid" style="grid-template-columns:2fr 1fr">
+    <div class="card tall">
+      <div class="wrap" id="wrapHist"><div class="no-data">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:.5rem">📡 Weekly Signal Log</div>
+      <div id="signalLog" style="max-height:240px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:.66rem"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">Source: Federal Reserve H.4.1 via FRED API (serverless proxy) · v2.0-AUDIT<br>Net Liquidity = WALCL − WTREGEN − RRPONTTLD (units normalized to $M) · Release: Thursdays 16:30 ET (22:30 WAT)</footer>
+
+<button class="log-toggle" onclick="document.getElementById('logP').classList.toggle('show')">📋 Log</button>
+<div class="log-panel" id="logP"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   GLOBALS & UTILS
+   ═══════════════════════════════════════════════════════════ */
+var logEl=document.getElementById("logP");
+function log(msg,cls){var d=new Date().toLocaleTimeString();logEl.innerHTML+='<div class="'+(cls||"")+'">['+ d+'] '+msg+'</div>';console.log("[H41]",msg);}
+
+// ──── FRED API ────
+var FRED_KEY = ""; // v2.0 AUDIT FIX C1: key injected server-side by Netlify /fred-proxy — never in client
+var FRED_BASE = "/fred-proxy/series/observations"; // v2.0 AUDIT FIX C1: serverless proxy (same-origin, no CORS, no public proxies)
+
+var chartInstances = [];
+function destroyCharts(){chartInstances.forEach(function(c){try{c.destroy();}catch(e){}});chartInstances=[];}
+
+// FRED Tickers
+var TICKERS = {
+  WALCL:"WALCL",        // Total Assets
+  WTREGEN:"WTREGEN",    // TGA
+  RRPONTTLD:"RRPONTTLD",// ON RRP
+  WRESBAL:"WRESBAL",    // Reserve Balances
+  TREAST:"TREAST",      // Treasury Securities
+  MBST:"WSHOMCB",       // MBS (correct ticker)
+  PRIMARYCR:"WLCFLPCL", // Primary Credit
+  SOFR:"SOFR",          // Secured Overnight Financing Rate
+  IORB:"IORB"           // Interest on Reserve Balances
+};
+
+// Cached data
+var DATA = {};
+var NL_SERIES = {dates:[],values:[]};   // Net Liquidity
+var WK_CHANGES = [];                    // Weekly % changes
+
+/* ═══════════════════════════════════════════════════════════
+   CLOCK & COUNTDOWN
+   ═══════════════════════════════════════════════════════════ */
+function updateClocks(){
+  var now=new Date();
+  var watOpts={timeZone:"Africa/Lagos",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false};
+  var etOpts={timeZone:"America/New_York",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false};
+  document.getElementById("clockWAT").textContent=now.toLocaleTimeString("en-GB",watOpts)+" WAT";
+  document.getElementById("clockET").textContent=now.toLocaleTimeString("en-US",etOpts)+" ET";
+
+  // Countdown to next Thursday 16:30 ET
+  var etStr=now.toLocaleString("en-US",{timeZone:"America/New_York"});
+  var et=new Date(etStr);
+  var day=et.getDay(); // 0=Sun
+  var daysUntilThu=(4-day+7)%7;
+  if(daysUntilThu===0){
+    var releaseToday=new Date(et);releaseToday.setHours(16,30,0,0);
+    if(et>releaseToday) daysUntilThu=7;
+  }
+  var target=new Date(et);
+  target.setDate(target.getDate()+daysUntilThu);
+  target.setHours(16,30,0,0);
+  var diff=target-et;
+  var h=Math.floor(diff/3600000);var m=Math.floor((diff%3600000)/60000);
+  document.getElementById("countdown").textContent=h+"h "+m+"m";
+}
+setInterval(updateClocks,1000);updateClocks();
+
+/* ═══════════════════════════════════════════════════════════
+   TAB SWITCHING
+   ═══════════════════════════════════════════════════════════ */
+document.querySelector(".tab-bar").addEventListener("click",function(e){
+  var btn=e.target;if(!btn.classList.contains("tab-btn")||btn.classList.contains("active"))return;
+  document.querySelectorAll(".tab-btn").forEach(function(b){b.classList.remove("active");});
+  document.querySelectorAll(".tab-content").forEach(function(t){t.classList.remove("active");});
+  btn.classList.add("active");
+  document.getElementById("tab-"+btn.getAttribute("data-tab")).classList.add("active");
+  log("Tab: "+btn.textContent);
+});
+
+/* ═══════════════════════════════════════════════════════════
+   FRED API FETCH
+   ═══════════════════════════════════════════════════════════ */
+var IS_FILE = location.protocol === "file:";
+
+function delay(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+async function tryFetch(url, timeout){
+  var controller = new AbortController();
+  var timer = setTimeout(function(){controller.abort();}, timeout||30000);
+  try {
+    var resp = await fetch(url, {signal:controller.signal});
+    clearTimeout(timer);
+    if(!resp.ok) throw new Error("HTTP "+resp.status);
+    return JSON.parse(await resp.text());
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+var failedSeries = [];
+
+/* v2.0 AUDIT FIX C1+C2: single same-origin proxy endpoint, no public CORS proxies,
+   3 attempts with 2s/4s backoff. Key appended only if FRED_KEY is non-empty (local dev). */
+async function fetchFRED(seriesId, startDate){
+  var url = FRED_BASE+"?series_id="+seriesId+"&file_type=json&sort_order=asc";
+  if(FRED_KEY) url += "&api_key="+FRED_KEY;
+  if(startDate) url += "&observation_start="+startDate;
+
+  for(var attempt=0; attempt<3; attempt++){
+    try{
+      var json = await tryFetch(url, 30000);
+      if(json.error_message) throw new Error(json.error_message);
+      var obs = (json.observations||[]).filter(function(o){return o.value!=="."&&!isNaN(parseFloat(o.value));});
+      log("  \u2713 "+seriesId+": "+obs.length+(attempt>0?" r"+attempt:""), "ok");
+      return obs.map(function(o){return{date:o.date, value:parseFloat(o.value)};});
+    }catch(e){
+      log("  \u26a0 "+seriesId+" #"+(attempt+1)+": "+e.message, "warn");
+      if(attempt<2) await delay(2000*(attempt+1));
+    }
+  }
+  log("  \u2717 "+seriesId+": FAILED", "fail");
+  failedSeries.push(seriesId);
+  return [];
+}
+
+function startDateStr(){
+  var d=new Date();d.setMonth(d.getMonth()-18);
+  return d.toISOString().slice(0,10);
+}
+
+function showFileProtocolHelp(){
+  var box = document.getElementById("errBox");
+  box.innerHTML = '<strong>\u26a0 This dashboard fetches FRED data through a same-origin serverless proxy.</strong><br>'+
+    'Open it from its deployed URL (Netlify) \u2014 it cannot load data from <code>file://</code> or other origins.';
+  box.classList.add("show");
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DATA LOADING — fully sequential with delays
+   ═══════════════════════════════════════════════════════════ */
+async function loadAllData(isRefresh){
+  var sDot=document.getElementById("sDot"),sTxt=document.getElementById("sTxt"),errBox=document.getElementById("errBox");
+  if(!isRefresh){sDot.className="dot";sTxt.textContent="Loading…";}
+  failedSeries = [];
+
+  try{
+    log(isRefresh?"Auto-refresh triggered…":"Initial data load… "+(IS_FILE?"(file:// detected)":"(http)"));
+    var sd=startDateStr();
+
+    // v2.0 AUDIT FIX C2: all 9 series in PARALLEL (was sequential + 1.5s delays = 25-45s)
+    var tickers=["WALCL","WTREGEN","RRPONTTLD","WRESBAL","TREAST","MBST","PRIMARYCR","SOFR","IORB"];
+    // v2.0 AUDIT FIX C3: FRED units are MIXED \u2014 WTREGEN/RRPONTTLD/WRESBAL arrive in $Billions,
+    // the rest in $Millions. Normalize everything to $Millions so all thresholds/math are real.
+    var UNITS={WALCL:1,WTREGEN:1000,RRPONTTLD:1000,WRESBAL:1000,TREAST:1,MBST:1,PRIMARYCR:1,SOFR:1,IORB:1};
+    var ovTxt=document.getElementById("ovTxt");
+    if(ovTxt) ovTxt.textContent="Fetching 9 FRED series in parallel\u2026";
+    var results=await Promise.allSettled(tickers.map(function(k){return fetchFRED(TICKERS[k],sd);}));
+    results.forEach(function(r,i){
+      var k=tickers[i];
+      var arr=(r.status==="fulfilled")?r.value:[];
+      var f=UNITS[k];
+      DATA[k]=(f===1)?arr:arr.map(function(o){return{date:o.date,value:o.value*f};});
+    });
+
+    var totalObs=0;
+    tickers.forEach(function(k){totalObs+=DATA[k].length;});
+    log("Total observations loaded: "+totalObs,totalObs>0?"ok":"fail");
+
+    if(IS_FILE) showFileProtocolHelp();
+
+    // Compute Net Liquidity series
+    computeNetLiquidity();
+    computeWeeklyChanges();
+
+    // Render everything
+    destroyCharts();
+    renderKPIs();
+    renderMainTab();
+    renderAssetsTab();
+    renderDrainsTab();
+    renderAlertsTab();
+    renderHistoryTab();
+
+    if(failedSeries.length===0) errBox.classList.remove("show");
+    var okCount=tickers.filter(function(k){return DATA[k]&&DATA[k].length;}).length;
+    sDot.className=okCount===9?"dot ok":"dot err";
+    sTxt.textContent=okCount===9?"Live \u00b7 9/9":"Partial \u00b7 "+okCount+"/9";
+    /* v2.0 AUDIT: any card still showing Loading\u2026 had no data */
+    document.querySelectorAll(".no-data").forEach(function(el){if(/Loading/.test(el.textContent))el.textContent="NO DATA";});
+    document.getElementById("lastUpdate")&&(document.getElementById("lastUpdate").textContent=new Date().toLocaleTimeString());
+    log(isRefresh?"Refresh complete ✓":"Dashboard ready ✓","ok");
+  }catch(e){
+    console.error(e);log("ERROR: "+e.message,"fail");
+    sDot.className="dot err";sTxt.textContent="Error";
+    errBox.innerHTML="<strong>Error:</strong> "+e.message;errBox.classList.add("show");
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COMPUTATIONS
+   ═══════════════════════════════════════════════════════════ */
+function computeNetLiquidity(){
+  var wMap={},tMap={},rMap={};
+  DATA.WALCL.forEach(function(d){wMap[d.date]=d.value;});
+  DATA.WTREGEN.forEach(function(d){tMap[d.date]=d.value;});
+  DATA.RRPONTTLD.forEach(function(d){rMap[d.date]=d.value;});
+
+  // Use WALCL dates as reference (weekly)
+  var dates=Object.keys(wMap).sort();
+  var nlDates=[],nlValues=[];
+  dates.forEach(function(d){
+    var w=wMap[d]||0,t=findClosest(tMap,d),r=findClosest(rMap,d);
+    /* v2.0 AUDIT FIX C3+A1: all series now in $M, and dates without TGA/RRP coverage are
+       SKIPPED instead of subtracting fake zeros (which made NL \u2248 WALCL alone) */
+    if(w>0 && t!==null && r!==null){
+      nlDates.push(d);
+      nlValues.push((w-t-r)/1000); // $M \u2192 $B
+    }
+  });
+  NL_SERIES={dates:nlDates,values:nlValues};
+}
+
+function findClosest(map,targetDate){
+  /* v2.0 AUDIT FIX A1: returns null (not 0) when no observation \u2264 date \u2014 prevents fake zeros */
+  if(!map||typeof map!=="object") return null;
+  if(map[targetDate]!==undefined) return map[targetDate];
+  var keys=Object.keys(map).sort();
+  var best=null;
+  for(var i=0;i<keys.length;i++){
+    if(keys[i]<=targetDate) best=map[keys[i]];
+  }
+  return best;
+}
+
+function computeWeeklyChanges(){
+  WK_CHANGES=[];
+  for(var i=1;i<NL_SERIES.dates.length;i++){
+    var prev=NL_SERIES.values[i-1];
+    var curr=NL_SERIES.values[i];
+    var pct=prev!==0?((curr-prev)/prev)*100:0;
+    WK_CHANGES.push({date:NL_SERIES.dates[i],value:curr,prev:prev,pct:pct});
+  }
+}
+
+function last(arr){return arr.length?arr[arr.length-1]:null;}
+function fmtB(v){return v>=1000?"$"+(v/1000).toFixed(2)+"T":"$"+v.toFixed(0)+"B";}
+function fmtM(v){return v>=1000000?"$"+(v/1000000).toFixed(2)+"T":v>=1000?"$"+(v/1000).toFixed(0)+"B":"$"+v.toFixed(0)+"M";}
+function fmtPct(v){return(v>=0?"+":"")+v.toFixed(2)+"%";}
+
+/* ═══════════════════════════════════════════════════════════
+   CHART HELPERS
+   ═══════════════════════════════════════════════════════════ */
+var CHART_DEFAULTS={
+  responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{display:false},tooltip:{mode:"index",intersect:false,titleFont:{family:"JetBrains Mono",size:11},bodyFont:{family:"JetBrains Mono",size:11}}},
+  scales:{
+    x:{grid:{color:"rgba(28,38,56,.5)"},ticks:{color:"#556677",font:{family:"JetBrains Mono",size:9},maxTicksLimit:8}},
+    y:{grid:{color:"rgba(28,38,56,.5)"},ticks:{color:"#556677",font:{family:"JetBrains Mono",size:10}}}
+  },
+  elements:{point:{radius:0,hoverRadius:4},line:{tension:.3,borderWidth:2}}
+};
+
+function makeChart(wrapperId,cfg){
+  var wrap=document.getElementById(wrapperId);if(!wrap)return null;
+  wrap.innerHTML='<canvas></canvas>';
+  var ctx=wrap.querySelector("canvas").getContext("2d");
+  var merged=JSON.parse(JSON.stringify(CHART_DEFAULTS));
+  // Deep merge
+  if(cfg.options){
+    if(cfg.options.plugins){Object.assign(merged.plugins,cfg.options.plugins);}
+    if(cfg.options.scales){for(var s in cfg.options.scales){merged.scales[s]=Object.assign(merged.scales[s]||{},cfg.options.scales[s]);}}
+    for(var k in cfg.options){if(k!=="plugins"&&k!=="scales")merged[k]=cfg.options[k];}
+  }
+  var chart=new Chart(ctx,{type:cfg.type||"line",data:cfg.data,options:merged});
+  chartInstances.push(chart);
+  return chart;
+}
+
+function shortDate(d){var p=d.split("-");return p[1]+"/"+p[2];}
+
+/* ═══════════════════════════════════════════════════════════
+   KPIs
+   ═══════════════════════════════════════════════════════════ */
+function renderKPIs(){
+  // Net Liquidity
+  var nl=last(NL_SERIES.values);
+  var wk=last(WK_CHANGES);
+  if(nl!==null){
+    document.getElementById("kNL").textContent=fmtB(nl);
+    if(wk){
+      var el=document.getElementById("kNLd");
+      el.textContent=fmtPct(wk.pct)+" weekly";
+      el.className="kpi-sub "+(wk.pct>=2?"pos":wk.pct<=-2?"neg":"watch");
+    }
+  }
+  // Reserve Balances
+  var rb=last(DATA.WRESBAL);
+  if(rb){
+    document.getElementById("kRB").textContent=fmtM(rb.value);
+    var rbStatus=rb.value<2500000?"CRITICAL":rb.value<3000000?"NERVOUS":"AMPLE";
+    var rbEl=document.getElementById("kRBd");
+    rbEl.textContent=rbStatus;
+    rbEl.className="kpi-sub "+(rbStatus==="AMPLE"?"pos":rbStatus==="NERVOUS"?"watch":"neg");
+  }
+  // SOFR-IORB Spread
+  var sofr=last(DATA.SOFR),iorb=last(DATA.IORB);
+  if(sofr&&iorb){
+    var spread=Math.round((sofr.value-iorb.value)*100); // v2.0 AUDIT FIX A2: numeric bps, not string
+    document.getElementById("kSP").textContent=spread+" bps";
+    var spEl=document.getElementById("kSPd");
+    var spStatus=spread>30?"CRITICAL":spread>15?"STRESS":"NORMAL";
+    spEl.textContent=spStatus;
+    spEl.className="kpi-sub "+(spStatus==="NORMAL"?"pos":spStatus==="STRESS"?"watch":"neg");
+  }
+  // TGA
+  var tga=last(DATA.WTREGEN);
+  if(tga){
+    document.getElementById("kTGA").textContent=fmtM(tga.value);
+    var tgaEl=document.getElementById("kTGAd");
+    var tgaStatus=tga.value>=900000?"HEAVY DRAIN":tga.value>=750000?"DRAIN WATCH":"SAFE";
+    tgaEl.textContent=tgaStatus;
+    tgaEl.className="kpi-sub "+(tgaStatus==="SAFE"?"pos":tgaStatus==="DRAIN WATCH"?"watch":"neg");
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ALERT PANEL (used in main tab and alerts tab)
+   ═══════════════════════════════════════════════════════════ */
+function getAlerts(){
+  var alerts=[];
+  // WRESBAL
+  var rb=last(DATA.WRESBAL);
+  if(rb){
+    var rbV=rb.value;
+    alerts.push({label:"WRESBAL",value:fmtM(rbV),status:rbV<2500000?"CRITICAL":rbV<3000000?"NERVOUS":"SAFE",detail:rbV<3000000?"Below $3T ample threshold":"Above $3T"});
+  }
+  // Primary Credit
+  var pc=DATA.PRIMARYCR;
+  if(pc.length>=2){
+    var pcCurr=pc[pc.length-1].value,pcPrev=pc[pc.length-2].value;
+    var pcChg=pcPrev>0?((pcCurr-pcPrev)/pcPrev)*100:0;
+    alerts.push({label:"Primary Credit",value:fmtM(pcCurr),status:pcChg>20?"PANIC":"LOW",detail:fmtPct(pcChg)+" weekly"});
+  }
+  // SOFR-IORB
+  var sofr=last(DATA.SOFR),iorb=last(DATA.IORB);
+  if(sofr&&iorb){
+    var sp=Math.round((sofr.value-iorb.value)*100); /* v2.0 AUDIT FIX A2 */
+    alerts.push({label:"SOFR−IORB",value:sp+"bps",status:sp>30?"CRITICAL":sp>15?"STRESS":"NORMAL",detail:sp>30?"Crisis level":sp>15?"Elevated":"Normal range"});
+  }
+  // Net Liq Weekly
+  var wk=last(WK_CHANGES);
+  if(wk){
+    alerts.push({label:"Net Liq Δ%",value:fmtPct(wk.pct),status:wk.pct>=2?"RISK-ON":wk.pct<=-2?"RISK-OFF":"WATCH",detail:wk.pct>=2?"Bullish risk":wk.pct<=-2?"Bearish risk":"Neutral"});
+  }
+  // TGA
+  var tga=last(DATA.WTREGEN);
+  if(tga){
+    alerts.push({label:"TGA",value:fmtM(tga.value),status:tga.value>=900000?"HEAVY DRAIN":tga.value>=750000?"DRAIN":"SAFE",detail:tga.value>=800000?"High drain active":"Within range"});
+  }
+  // ON RRP
+  var rrp=last(DATA.RRPONTTLD);
+  if(rrp){
+    alerts.push({label:"ON RRP",value:fmtM(rrp.value),status:rrp.value>=200000?"WATCH":"LOW",detail:rrp.value>=200000?"Capital parked":"Near zero"});
+  }
+  return alerts;
+}
+
+function badgeClass(status){
+  if(["SAFE","NORMAL","LOW","AMPLE","RISK-ON"].indexOf(status)!==-1) return"badge-safe";
+  if(["WATCH","DRAIN","NERVOUS","STRESS","DRAIN WATCH"].indexOf(status)!==-1) return"badge-watch";
+  if(["CRITICAL","PANIC","RISK-OFF","HEAVY DRAIN"].indexOf(status)!==-1) return"badge-critical";
+  return"badge-neutral";
+}
+
+function renderAlertPanel(containerId){
+  var alerts=getAlerts();
+  var html="";
+  alerts.forEach(function(a){
+    html+='<div class="alert-row"><span class="label">'+a.label+'</span><span class="value">'+a.value+'</span><span class="alert-badge '+badgeClass(a.status)+'">'+a.status+'</span></div>';
+  });
+  document.getElementById(containerId).innerHTML=html;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 1: MAIN OVERVIEW
+   ═══════════════════════════════════════════════════════════ */
+function renderMainTab(){
+  // Net Liquidity chart
+  var nlLast=last(NL_SERIES.values)||0;
+  document.getElementById("nlVal").textContent=fmtB(nlLast);
+  var plus2=nlLast*1.02,minus2=nlLast*0.98;
+
+  makeChart("wrapNL",{type:"line",data:{
+    labels:NL_SERIES.dates.map(shortDate),
+    datasets:[{
+      label:"Net Liquidity",data:NL_SERIES.values,
+      borderColor:"#fdb813",backgroundColor:"rgba(253,184,19,.1)",fill:true
+    }]
+  },options:{plugins:{annotation:{annotations:{
+    plus2:{type:"line",yMin:plus2,yMax:plus2,borderColor:"rgba(34,197,94,.4)",borderDash:[5,5],borderWidth:1,label:{display:true,content:"+2%",position:"end",font:{size:9},color:"#22c55e"}},
+    minus2:{type:"line",yMin:minus2,yMax:minus2,borderColor:"rgba(239,68,68,.4)",borderDash:[5,5],borderWidth:1,label:{display:true,content:"-2%",position:"end",font:{size:9},color:"#ef4444"}}
+  }}},scales:{y:{ticks:{callback:function(v){return fmtB(v);}}}}}});
+
+  // Alert Panel
+  renderAlertPanel("alertPanel");
+
+  // Status Badges
+  var alerts=getAlerts();
+  var bHtml="";
+  alerts.forEach(function(a){
+    bHtml+='<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem"><span class="alert-badge '+badgeClass(a.status)+'" style="min-width:85px;text-align:center">'+a.status+'</span><span style="font-size:.68rem;font-family:JetBrains Mono,monospace;color:var(--t2)">'+a.label+': '+a.value+'</span></div>';
+  });
+  document.getElementById("statusBadges").innerHTML=bHtml;
+
+  // Reserve Balances chart with danger zones
+  var rbData=DATA.WRESBAL;
+  var rbLast=last(rbData);
+  document.getElementById("rbVal").textContent=rbLast?fmtM(rbLast.value):"—";
+  if(rbData.length){
+    makeChart("wrapRB",{type:"line",data:{
+      labels:rbData.map(function(d){return shortDate(d.date);}),
+      datasets:[{label:"Reserve Balances",data:rbData.map(function(d){return d.value/1000000;}),borderColor:"#22c55e",backgroundColor:"rgba(34,197,94,.08)",fill:true}]
+    },options:{plugins:{annotation:{annotations:{
+      warn:{type:"line",yMin:3,yMax:3,borderColor:"var(--orange)",borderDash:[6,4],borderWidth:2,label:{display:true,content:"$3.0T WARNING",position:"start",font:{size:9},color:"#f97316"}},
+      crisis:{type:"line",yMin:2.5,yMax:2.5,borderColor:"var(--red)",borderDash:[6,4],borderWidth:2,label:{display:true,content:"$2.5T CRISIS",position:"start",font:{size:9},color:"#ef4444"}}
+    }}},scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(1)+"T";}}}}}});
+  }
+
+  // SOFR-IORB Spread chart
+  var sofrD=DATA.SOFR,iorbD=DATA.IORB;
+  if(sofrD.length&&iorbD.length){
+    var iorbMap={};iorbD.forEach(function(d){iorbMap[d.date]=d.value;});
+    var spDates=[],spVals=[];
+    sofrD.forEach(function(d){
+      var ib=findClosest(iorbMap,d.date);
+      if(ib!==null&&ib>0){spDates.push(d.date);spVals.push(Math.round((d.value-ib)*1000)/10);}
+    });
+    var spLast=spVals.length?spVals[spVals.length-1]:"—";
+    document.getElementById("spVal").textContent=spLast+" bps";
+    makeChart("wrapSP",{type:"bar",data:{
+      labels:spDates.map(shortDate),
+      datasets:[{label:"SOFR−IORB (bps)",data:spVals,
+        backgroundColor:spVals.map(function(v){return v>30?"rgba(239,68,68,.7)":v>15?"rgba(249,115,22,.7)":"rgba(34,197,94,.5)";})}]
+    },options:{scales:{y:{ticks:{callback:function(v){return v+" bps";}}}}}});
+  }
+
+  // Weekly Change histogram
+  if(WK_CHANGES.length){
+    var wkLast=WK_CHANGES[WK_CHANGES.length-1];
+    document.getElementById("wkVal").textContent=fmtPct(wkLast.pct);
+    makeChart("wrapWK",{type:"bar",data:{
+      labels:WK_CHANGES.map(function(w){return shortDate(w.date);}),
+      datasets:[{label:"Weekly Δ%",data:WK_CHANGES.map(function(w){return w.pct;}),
+        backgroundColor:WK_CHANGES.map(function(w){return w.pct>=2?"rgba(34,197,94,.7)":w.pct<=-2?"rgba(239,68,68,.7)":"rgba(136,153,170,.4)";})}]
+    },options:{plugins:{annotation:{annotations:{
+      plus:{type:"line",yMin:2,yMax:2,borderColor:"rgba(34,197,94,.5)",borderDash:[4,4],borderWidth:1},
+      minus:{type:"line",yMin:-2,yMax:-2,borderColor:"rgba(239,68,68,.5)",borderDash:[4,4],borderWidth:1}
+    }}},scales:{y:{ticks:{callback:function(v){return v+"%";}}}}}});
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 2: ASSETS TRACKER
+   ═══════════════════════════════════════════════════════════ */
+function renderAssetsTab(){
+  // WALCL
+  var wa=DATA.WALCL;
+  document.getElementById("waVal").textContent=wa.length?fmtM(last(wa).value):"—";
+  if(wa.length){
+    makeChart("wrapWA",{type:"line",data:{
+      labels:wa.map(function(d){return shortDate(d.date);}),
+      datasets:[{label:"Total Assets",data:wa.map(function(d){return d.value/1000;}),borderColor:"#fdb813",backgroundColor:"rgba(253,184,19,.08)",fill:true}]
+    },options:{scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(0)+"B";}}}}}});
+  }
+  // TREAST
+  var tr=DATA.TREAST;
+  document.getElementById("trVal").textContent=tr.length?fmtM(last(tr).value):"—";
+  if(tr.length){
+    makeChart("wrapTR",{type:"line",data:{
+      labels:tr.map(function(d){return shortDate(d.date);}),
+      datasets:[{label:"Treasury Securities",data:tr.map(function(d){return d.value/1000;}),borderColor:"#38bdf8",backgroundColor:"rgba(56,189,248,.08)",fill:true}]
+    },options:{scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(0)+"B";}}}}}});
+  }
+  // MBS
+  var mb=DATA.MBST;
+  document.getElementById("mbVal").textContent=mb.length?fmtM(last(mb).value):"—";
+  if(mb.length){
+    makeChart("wrapMB",{type:"line",data:{
+      labels:mb.map(function(d){return shortDate(d.date);}),
+      datasets:[{label:"MBS",data:mb.map(function(d){return d.value/1000;}),borderColor:"#a855f7",backgroundColor:"rgba(168,85,247,.08)",fill:true}]
+    },options:{scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(0)+"B";}}}}}});
+  }
+  // Primary Credit
+  var pc=DATA.PRIMARYCR;
+  document.getElementById("pcVal").textContent=pc.length?fmtM(last(pc).value):"—";
+  if(pc.length){
+    makeChart("wrapPC",{type:"bar",data:{
+      labels:pc.map(function(d){return shortDate(d.date);}),
+      datasets:[{label:"Primary Credit",data:pc.map(function(d){return d.value;}),
+        backgroundColor:pc.map(function(d,i){
+          if(i>0){var chg=pc[i-1].value>0?((d.value-pc[i-1].value)/pc[i-1].value)*100:0;return chg>20?"rgba(239,68,68,.8)":"rgba(249,115,22,.5)";}
+          return"rgba(249,115,22,.5)";
+        })}]
+    },options:{scales:{y:{ticks:{callback:function(v){return"$"+v+"M";}}}}}});
+  }
+
+  // Assets weekly record table
+  var html='<table class="htable"><thead><tr><th>Date</th><th>WALCL ($B)</th><th>Treasuries ($B)</th><th>MBS ($B)</th><th>Primary Cr ($M)</th><th>Weekly WALCL Δ</th></tr></thead><tbody>';
+  var waMap={},trMap={},mbMap={},pcMap={};
+  wa.forEach(function(d){waMap[d.date]=d.value;});
+  tr.forEach(function(d){trMap[d.date]=d.value;});
+  mb.forEach(function(d){mbMap[d.date]=d.value;});
+  pc.forEach(function(d){pcMap[d.date]=d.value;});
+  var allDates=Object.keys(waMap).sort().reverse().slice(0,20);
+  allDates.forEach(function(d,i){
+    var wV=waMap[d]||0,tV=trMap[d]||0,mV=mbMap[d]||0,pV=pcMap[d]||0;
+    var prev=allDates[i+1]?waMap[allDates[i+1]]||0:0;
+    var delta=prev>0?((wV-prev)/1000).toFixed(1):"—";
+    var cls=i===0?" class='latest'":"";
+    html+="<tr"+cls+"><td>"+d+"</td><td>"+(wV/1000).toFixed(1)+"</td><td>"+(tV/1000).toFixed(1)+"</td><td>"+(mV/1000).toFixed(1)+"</td><td>"+pV.toFixed(0)+"</td><td"+(delta!=="—"&&parseFloat(delta)<0?" class='neg'":" class='pos'")+">"+delta+"</td></tr>";
+  });
+  html+="</tbody></table>";
+  document.getElementById("assetsTableWrap").innerHTML=html;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 3: DRAINS TRACKER
+   ═══════════════════════════════════════════════════════════ */
+function renderDrainsTab(){
+  var tga=DATA.WTREGEN;
+  document.getElementById("tgaChVal").textContent=tga.length?fmtM(last(tga).value):"—";
+  if(tga.length){
+    makeChart("wrapTGA",{type:"line",data:{
+      labels:tga.map(function(d){return shortDate(d.date);}),
+      datasets:[{label:"TGA",data:tga.map(function(d){return d.value/1000;}),borderColor:"#f97316",backgroundColor:"rgba(249,115,22,.1)",fill:true}]
+    },options:{scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(0)+"B";}}}}}});
+  }
+  // ON RRP
+  var rrp=DATA.RRPONTTLD;
+  document.getElementById("rrpVal").textContent=rrp.length?fmtM(last(rrp).value):"—";
+  if(rrp.length){
+    makeChart("wrapRRP",{type:"line",data:{
+      labels:rrp.map(function(d){return shortDate(d.date);}),
+      datasets:[{label:"ON RRP",data:rrp.map(function(d){return d.value/1000;}),borderColor:"#a855f7",backgroundColor:"rgba(168,85,247,.1)",fill:true}]
+    },options:{plugins:{annotation:{annotations:{
+      sig:{type:"line",yMin:200,yMax:200,borderColor:"rgba(245,158,11,.5)",borderDash:[5,5],borderWidth:1,label:{display:true,content:"$200B Signal",position:"end",font:{size:9},color:"#f59e0b"}}
+    }}},scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(0)+"B";}}}}}});
+  }
+  // Reserve Balances (duplicate for drains tab)
+  var rb=DATA.WRESBAL;
+  document.getElementById("rbVal2").textContent=rb.length?fmtM(last(rb).value):"—";
+  if(rb.length){
+    makeChart("wrapRB2",{type:"line",data:{
+      labels:rb.map(function(d){return shortDate(d.date);}),
+      datasets:[{label:"Reserve Balances",data:rb.map(function(d){return d.value/1000000;}),borderColor:"#22c55e",backgroundColor:"rgba(34,197,94,.08)",fill:true}]
+    },options:{plugins:{annotation:{annotations:{
+      w:{type:"line",yMin:3,yMax:3,borderColor:"#f97316",borderDash:[6,4],borderWidth:2,label:{display:true,content:"$3.0T",position:"start",font:{size:9},color:"#f97316"}},
+      c:{type:"line",yMin:2.5,yMax:2.5,borderColor:"#ef4444",borderDash:[6,4],borderWidth:2,label:{display:true,content:"$2.5T",position:"start",font:{size:9},color:"#ef4444"}}
+    }}},scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(1)+"T";}}}}}});
+  }
+
+  // Stacked drains: TGA + ON RRP
+  if(tga.length&&rrp.length){
+    var tgaMap={},rrpMap={};
+    tga.forEach(function(d){tgaMap[d.date]=d.value;});
+    rrp.forEach(function(d){rrpMap[d.date]=d.value;});
+    var dDates=Object.keys(tgaMap).filter(function(d){return rrpMap[d]!==undefined;}).sort();
+    makeChart("wrapDrains",{type:"bar",data:{
+      labels:dDates.map(shortDate),
+      datasets:[
+        {label:"TGA",data:dDates.map(function(d){return(tgaMap[d]||0)/1000;}),backgroundColor:"rgba(249,115,22,.7)"},
+        {label:"ON RRP",data:dDates.map(function(d){return(rrpMap[d]||0)/1000;}),backgroundColor:"rgba(168,85,247,.7)"}
+      ]
+    },options:{scales:{x:{stacked:true},y:{stacked:true,ticks:{callback:function(v){return"$"+v+"B";}}}}}});
+  }
+
+  // SOFR-IORB full spread
+  var sofrD=DATA.SOFR,iorbD=DATA.IORB;
+  if(sofrD.length&&iorbD.length){
+    var iorbMap={};iorbD.forEach(function(d){iorbMap[d.date]=d.value;});
+    var spD=[],spV=[];
+    sofrD.forEach(function(d){
+      var ib=findClosest(iorbMap,d.date);
+      if(ib!==null&&ib>0){spD.push(d.date);spV.push((d.value-ib)*100);}
+    });
+    makeChart("wrapSPfull",{type:"line",data:{
+      labels:spD.map(shortDate),
+      datasets:[{label:"SOFR−IORB",data:spV,borderColor:"#f43f5e",backgroundColor:"rgba(244,63,94,.08)",fill:true}]
+    },options:{plugins:{annotation:{annotations:{
+      s5:{type:"box",yMin:0,yMax:5,backgroundColor:"rgba(34,197,94,.06)"},
+      s15:{type:"box",yMin:5,yMax:15,backgroundColor:"rgba(245,158,11,.04)"},
+      s30:{type:"box",yMin:15,yMax:30,backgroundColor:"rgba(249,115,22,.06)"},
+      sC:{type:"box",yMin:30,yMax:60,backgroundColor:"rgba(239,68,68,.06)"}
+    }}},scales:{y:{ticks:{callback:function(v){return v+" bps";}}}}}});
+
+    // Spread table
+    var stHtml='<table class="htable"><thead><tr><th>Date</th><th>SOFR</th><th>IORB</th><th>Spread</th><th>Status</th></tr></thead><tbody>';
+    var last10=spD.slice(-10).reverse();
+    last10.forEach(function(d,i){
+      var idx=spD.indexOf(d);
+      var sv=spV[idx];
+      var sofrV=sofrD.find(function(x){return x.date===d;});
+      var iorbV=findClosest(iorbMap,d);
+      var st=sv>30?"CRITICAL":sv>15?"STRESS":"NORMAL";
+      var cc=sv>30?"neg":sv>15?"watch":"pos";
+      stHtml+="<tr><td>"+d+"</td><td>"+(sofrV?sofrV.value.toFixed(2):"—")+"</td><td>"+iorbV.toFixed(2)+"</td><td class='"+cc+"'>"+sv.toFixed(1)+"</td><td class='"+cc+"'>"+st+"</td></tr>";
+    });
+    stHtml+="</tbody></table>";
+    document.getElementById("spreadTableWrap").innerHTML=stHtml;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 4: ALERTS & LIMITS
+   ═══════════════════════════════════════════════════════════ */
+function renderAlertsTab(){
+  var alerts=[
+    {ind:"Reserve Balances (WRESBAL)",level:"< $3.0T",signal:"Tensiones repo/Fed Funds"},
+    {ind:"Reserve Balances (WRESBAL)",level:"< $2.5T",signal:"CRISIS — Fed pausa QT"},
+    {ind:"Primary Credit (WLCFLPCL)",level:"+20% semanal",signal:"Banco en dificultades"},
+    {ind:"TGA (WTREGEN)",level:"> $800B subiendo",signal:"Drenaje activo Bearish"},
+    {ind:"ON RRP (RRPONTTLD)",level:"Rebote > $200B",signal:"Liquidez se retrae"},
+    {ind:"SOFR-IORB Spread",level:"> 15 bps",signal:"Estrés interbancario"},
+    {ind:"SOFR-IORB Spread",level:"> 30 bps",signal:"CRISIS liquidez"},
+    {ind:"Net Liquidity Δ%",level:"< -2% semanal",signal:"Risk-OFF — comprar USD"},
+    {ind:"Net Liquidity Δ%",level:"> +2% semanal",signal:"Risk-ON — vender USD"}
+  ];
+
+  // Compute current statuses
+  var statusMap={};
+  var allAlerts=getAlerts();
+  allAlerts.forEach(function(a){statusMap[a.label]=a;});
+
+  var html='<table class="htable"><thead><tr><th>Indicator (FRED Ticker)</th><th>Alert Level</th><th>Signal &amp; Action</th><th>Current Status</th></tr></thead><tbody>';
+  alerts.forEach(function(a){
+    var key=a.ind.split("(")[0].trim();
+    var match=null;
+    for(var k in statusMap){if(a.ind.indexOf(k)!==-1||k.indexOf(key.slice(0,6))!==-1){match=statusMap[k];break;}}
+    var statusHtml=match?'<span class="alert-badge '+badgeClass(match.status)+'">'+match.status+'</span> '+match.value:'—';
+    html+="<tr><td>"+a.ind+"</td><td>"+a.level+"</td><td>"+a.signal+"</td><td>"+statusHtml+"</td></tr>";
+  });
+  html+="</tbody></table>";
+  document.getElementById("alertsTableWrap").innerHTML=html;
+
+  // Forex Signal Matrix
+  var wk=last(WK_CHANGES);
+  var nlSignal=wk?(wk.pct>=2?"RISK-ON":wk.pct<=-2?"RISK-OFF":"NEUTRAL"):"—";
+  var nlColor=nlSignal==="RISK-ON"?"#22c55e":nlSignal==="RISK-OFF"?"#ef4444":"#556677";
+  var sofr=last(DATA.SOFR),iorb=last(DATA.IORB);
+  var sp=sofr&&iorb?((sofr.value-iorb.value)*100):0;
+  var spSignal=sp>30?"USD BULLISH":sp>15?"USD WATCH":"NEUTRAL";
+  var spColor=sp>30?"#ef4444":sp>15?"#f59e0b":"#22c55e";
+
+  document.getElementById("signalMatrix").innerHTML=
+    '<div class="signal-cell" style="background:'+nlColor+'22;border:1px solid '+nlColor+'55;color:'+nlColor+'">NL Δ%<br>'+nlSignal+'</div>'+
+    '<div class="signal-cell" style="background:'+spColor+'22;border:1px solid '+spColor+'55;color:'+spColor+'">SOFR-IORB<br>'+spSignal+'</div>'+
+    '<div class="signal-cell" style="background:'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'22;border:1px solid '+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'55;color:'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'">WRESBAL<br>'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"NERVOUS":"AMPLE")+'</div>'+
+    '<div class="signal-cell" style="background:'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=800000?"#ef4444":"#22c55e")+'22;border:1px solid '+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=800000?"#ef4444":"#22c55e")+'55;color:'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=800000?"#ef4444":"#22c55e")+'">TGA<br>'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=800000?"HIGH DRAIN":"SAFE")+'</div>';
+
+  // Speedometer (simple SVG)
+  var spBps=sp;
+  var angle=Math.min(Math.max(spBps/40,0),1)*180-90; // -90 to 90
+  document.getElementById("speedometer").innerHTML=
+    '<svg viewBox="0 0 200 120" width="200"><defs>'+
+    '<linearGradient id="sg" x1="0" y1="0" x2="1" y2="0">'+
+    '<stop offset="0%" stop-color="#22c55e"/><stop offset="37%" stop-color="#f59e0b"/><stop offset="75%" stop-color="#f97316"/><stop offset="100%" stop-color="#ef4444"/>'+
+    '</linearGradient></defs>'+
+    '<path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#sg)" stroke-width="14" stroke-linecap="round"/>'+
+    '<line x1="100" y1="100" x2="'+(100+65*Math.cos(angle*Math.PI/180))+'" y2="'+(100+65*Math.sin(angle*Math.PI/180))+'" stroke="#e2e8f0" stroke-width="3" stroke-linecap="round"/>'+
+    '<circle cx="100" cy="100" r="5" fill="#e2e8f0"/>'+
+    '<text x="100" y="88" text-anchor="middle" fill="#e2e8f0" font-size="16" font-weight="bold" font-family="JetBrains Mono">'+spBps.toFixed(0)+' bps</text>'+
+    '<text x="20" y="115" fill="#556677" font-size="8" font-family="JetBrains Mono">0</text>'+
+    '<text x="85" y="18" fill="#556677" font-size="8" font-family="JetBrains Mono">20</text>'+
+    '<text x="170" y="115" fill="#556677" font-size="8" font-family="JetBrains Mono">40</text>'+
+    '</svg>';
+
+  // Publication Calendar
+  var now=new Date();
+  var etStr=now.toLocaleString("en-US",{timeZone:"America/New_York"});
+  var et=new Date(etStr);
+  var day=et.getDay();
+  var daysUntil=(4-day+7)%7;
+  if(daysUntil===0){var rt=new Date(et);rt.setHours(16,30,0,0);if(et>rt)daysUntil=7;}
+  var nextThu=new Date(et);nextThu.setDate(nextThu.getDate()+daysUntil);
+
+  document.getElementById("pubCal").innerHTML=
+    '<div class="next">Next release: '+nextThu.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})+'</div>'+
+    '<div style="color:var(--t2)">H.4.1 Release: Thursday 22:30 WAT</div>'+
+    '<div class="window">OPERATIVE WINDOW: 22:30 → 02:30 WAT</div>';
+
+  // Legend table
+  var legend=[
+    {ref:"Total Assets",ticker:"WALCL",desc:"Balance total de la Fed"},
+    {ref:"Treasury Securities",ticker:"TREAST",desc:"Bonos del Tesoro en la Fed"},
+    {ref:"MBS",ticker:"WSHOMCB",desc:"Mortgage-Backed Securities"},
+    {ref:"Primary Credit",ticker:"WLCFLPCL",desc:"Préstamos de emergencia"},
+    {ref:"TGA",ticker:"WTREGEN",desc:"Cuenta General del Tesoro"},
+    {ref:"ON RRP",ticker:"RRPONTTLD",desc:"Reverse Repo — dinero estacionado"},
+    {ref:"Reserve Balances",ticker:"WRESBAL",desc:"Efectivo real de bancos"},
+    {ref:"SOFR",ticker:"SOFR",desc:"Tasa de financiamiento garantizado"},
+    {ref:"IORB",ticker:"IORB",desc:"Interés sobre reservas bancarias"}
+  ];
+  var lHtml='<table class="htable"><thead><tr><th>Reference</th><th>FRED Ticker</th><th>Description</th><th>Current Value</th></tr></thead><tbody>';
+  legend.forEach(function(l){
+    var val="—";
+    var d=DATA[Object.keys(TICKERS).find(function(k){return TICKERS[k]===l.ticker;})||""];
+    if(d&&d.length) val=fmtM(last(d).value);
+    lHtml+="<tr><td>"+l.ref+"</td><td style='color:var(--cyan)'>"+l.ticker+"</td><td>"+l.desc+"</td><td>"+val+"</td></tr>";
+  });
+  lHtml+="</tbody></table>";
+  document.getElementById("legendTableWrap").innerHTML=lHtml;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 5: HISTORICAL RECORDS
+   ═══════════════════════════════════════════════════════════ */
+function renderHistoryTab(){
+  if(!NL_SERIES.dates.length) return;
+
+  // Build full history table
+  var waMap={},trMap={},mbMap={},pcMap={},tgaMap={},rrpMap={},rbMap={};
+  DATA.WALCL.forEach(function(d){waMap[d.date]=d.value;});
+  DATA.TREAST.forEach(function(d){trMap[d.date]=d.value;});
+  DATA.MBST.forEach(function(d){mbMap[d.date]=d.value;});
+  DATA.PRIMARYCR.forEach(function(d){pcMap[d.date]=d.value;});
+  DATA.WTREGEN.forEach(function(d){tgaMap[d.date]=d.value;});
+  DATA.RRPONTTLD.forEach(function(d){rrpMap[d.date]=d.value;});
+  DATA.WRESBAL.forEach(function(d){rbMap[d.date]=d.value;});
+
+  var html='<table class="htable"><thead><tr><th>Week #</th><th>Date (Thursday)</th><th>WALCL ($B)</th><th>Treasuries ($B)</th><th>MBS ($B)</th><th>Primary Cr ($M)</th><th>TGA ($B)</th><th>ON RRP ($B)</th><th>Reserves ($B)</th><th>Net Liq ($B)</th><th>Net Liq Δ%</th><th>Signal</th></tr></thead><tbody>';
+
+  var dates=NL_SERIES.dates.slice().reverse();
+  dates.forEach(function(d,i){
+    var idx=NL_SERIES.dates.indexOf(d);
+    var nl=NL_SERIES.values[idx];
+    var wkC=WK_CHANGES.find(function(w){return w.date===d;});
+    var pct=wkC?wkC.pct:0;
+    var signal=pct>=2?"RISK-ON":pct<=-2?"RISK-OFF":"NEUTRAL";
+    var sigCls=signal==="RISK-ON"?"pos":signal==="RISK-OFF"?"neg":"";
+    var cls=i===0?" class='latest'":"";
+    var wNum=dates.length-i;
+
+    html+="<tr"+cls+"><td>"+wNum+"</td><td>"+d+"</td>"+
+      "<td>"+(waMap[d]?(waMap[d]/1000).toFixed(1):"—")+"</td>"+
+      "<td>"+(trMap[d]?(trMap[d]/1000).toFixed(1):"—")+"</td>"+
+      "<td>"+(mbMap[d]?(mbMap[d]/1000).toFixed(1):"—")+"</td>"+
+      "<td>"+(pcMap[d]?pcMap[d].toFixed(0):"—")+"</td>"+
+      "<td>"+(tgaMap[d]?(tgaMap[d]/1000).toFixed(1):findClosest(tgaMap,d)?(findClosest(tgaMap,d)/1000).toFixed(1):"—")+"</td>"+
+      "<td>"+(rrpMap[d]?(rrpMap[d]/1000).toFixed(1):findClosest(rrpMap,d)?(findClosest(rrpMap,d)/1000).toFixed(1):"—")+"</td>"+
+      "<td>"+(rbMap[d]?(rbMap[d]/1000).toFixed(1):"—")+"</td>"+
+      "<td>"+nl.toFixed(1)+"</td>"+
+      "<td class='"+(pct>=0?"pos":"neg")+"'>"+fmtPct(pct)+"</td>"+
+      "<td class='"+sigCls+"'>"+signal+"</td></tr>";
+  });
+  html+="</tbody></table>";
+  document.getElementById("historyTableWrap").innerHTML=html;
+
+  // Weekly change bar chart
+  if(WK_CHANGES.length){
+    makeChart("wrapHist",{type:"bar",data:{
+      labels:WK_CHANGES.map(function(w){return shortDate(w.date);}),
+      datasets:[{label:"Weekly Δ%",data:WK_CHANGES.map(function(w){return w.pct;}),
+        backgroundColor:WK_CHANGES.map(function(w){return w.pct>=2?"rgba(34,197,94,.8)":w.pct<=-2?"rgba(239,68,68,.8)":w.pct>=0?"rgba(34,197,94,.4)":"rgba(239,68,68,.4)";})}]
+    },options:{plugins:{annotation:{annotations:{
+      p2:{type:"line",yMin:2,yMax:2,borderColor:"#22c55e",borderDash:[5,5],borderWidth:1,label:{display:true,content:"+2% Risk-On",font:{size:9},position:"start",color:"#22c55e"}},
+      m2:{type:"line",yMin:-2,yMax:-2,borderColor:"#ef4444",borderDash:[5,5],borderWidth:1,label:{display:true,content:"-2% Risk-Off",font:{size:9},position:"start",color:"#ef4444"}}
+    }}},scales:{y:{ticks:{callback:function(v){return v+"%";}}}}}});
+  }
+
+  // Signal log
+  var logHtml="";
+  WK_CHANGES.slice().reverse().slice(0,15).forEach(function(w){
+    var signal=w.pct>=2?"RISK-ON":w.pct<=-2?"RISK-OFF":"NEUTRAL";
+    var color=signal==="RISK-ON"?"var(--green)":signal==="RISK-OFF"?"var(--red)":"var(--t3)";
+    var icon=signal==="RISK-ON"?"🟢":signal==="RISK-OFF"?"🔴":"⚪";
+    logHtml+='<div style="margin-bottom:.3rem;padding:.25rem .4rem;border-left:2px solid '+color+'">'+icon+' '+shortDate(w.date)+' → '+fmtPct(w.pct)+' → <span style="color:'+color+';font-weight:600">'+signal+'</span></div>';
+  });
+  document.getElementById("signalLog").innerHTML=logHtml;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT + THURSDAY AUTO-REFRESH
+   ═══════════════════════════════════════════════════════════ */
+(async function init(){
+  var ov=document.getElementById("ov");
+  await loadAllData(false);
+  ov.classList.add("hide");
+  setTimeout(function(){ov.remove();},600);
+
+  // Schedule Thursday refresh at 16:30 ET with polling
+  function scheduleThursdayRefresh(){
+    var now=new Date();
+    var etStr=now.toLocaleString("en-US",{timeZone:"America/New_York"});
+    var et=new Date(etStr);
+    var day=et.getDay();
+
+    // Next Thursday 16:25 ET (start polling 5 min early)
+    var daysUntilThu=(4-day+7)%7;
+    if(daysUntilThu===0){
+      var cutoff=new Date(et);cutoff.setHours(16,45,0,0);
+      if(et>cutoff) daysUntilThu=7;
+    }
+    var target=new Date(et);
+    target.setDate(target.getDate()+daysUntilThu);
+    target.setHours(16,25,0,0);
+
+    var msUntil=target.getTime()-et.getTime();
+    if(msUntil<0) msUntil+=7*86400000;
+
+    log("Next H.4.1 poll in "+Math.round(msUntil/60000)+" min (Thu 16:25 ET)");
+
+    setTimeout(function(){
+      log("─── H.4.1 Release Window ───","warn");
+      var pollCount=0;
+      var pollInterval=setInterval(function(){
+        pollCount++;
+        log("Poll #"+pollCount+" for new H.4.1 data…","warn");
+        loadAllData(true);
+        if(pollCount>=10){
+          clearInterval(pollInterval);
+          log("Polling stopped after 10 attempts.","warn");
+          scheduleThursdayRefresh();
+        }
+      },120000); // Every 2 minutes
+      loadAllData(true); // Immediate first check
+    },msUntil);
+  }
+  scheduleThursdayRefresh();
+})();
+</script>
+</body>
+</html>
