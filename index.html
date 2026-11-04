@@ -132,9 +132,9 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
 <div class="grid" style="grid-template-columns:1fr 1fr">
 <div class="card"><div class="card-title">Bank Credit (TOTBKCR)</div><div class="wrap" id="wrapH8BC"><div class="no-data">Loading…</div></div></div>
 <div class="card"><div class="card-title">Loans & Leases (TOTLL)</div><div class="wrap" id="wrapH8LL"><div class="no-data">Loading…</div></div></div>
-<div class="card"><div class="card-title">C&I Loans (BUSLOANS)</div><div class="wrap" id="wrapH8CI"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">C&I Loans (TOTCI · weekly)</div><div class="wrap" id="wrapH8CI"><div class="no-data">Loading…</div></div></div>
 <div class="card"><div class="card-title">Deposits (DPSACBW027SBOG)</div><div class="wrap" id="wrapH8DEP"><div class="no-data">Loading…</div></div></div>
-<div class="card"><div class="card-title">Borrowings (TLBACBW027SBOG)</div><div class="wrap" id="wrapH8BOR"><div class="no-data">Loading…</div></div></div>
+<div class="card"><div class="card-title">Borrowings (H8B3094NCBA)</div><div class="wrap" id="wrapH8BOR"><div class="no-data">Loading…</div></div></div>
 </div>
 <div class="sec-hdr"><div class="sec-dot" style="background:var(--violet)"></div><h2>Combined: Loans / Deposits / Borrowings</h2></div>
 <div class="grid" style="grid-template-columns:1fr"><div class="card tall"><div class="wrap" id="wrapH8Combo"><div class="no-data">Loading…</div></div></div></div>
@@ -186,7 +186,7 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
 </div></div>
 </div>
 
-<footer class="footer">Source: Federal Reserve H.8 / H.15 via FRED API<br>H.8 = Weekly official release · H.15 = Delayed daily close · All data from FRED, NOT live · <span style="color:var(--cyan)">v2.1-AUDIT</span></footer>
+<footer class="footer">Source: Federal Reserve H.8 / H.15 via FRED API<br>H.8 = Weekly official release · H.15 = Delayed daily close · All data from FRED, NOT live · <span style="color:var(--cyan)">v2.2 (series/unidades 07-oct-2026)</span></footer>
 <button class="log-toggle" onclick="document.getElementById('logP').classList.toggle('show')">📋 Log</button>
 <div class="log-panel" id="logP"></div>
 
@@ -240,16 +240,24 @@ async function loadAll(){
     // v2.1 AUDIT FIX (A2): carga PARALELA. Antes: 9 fetches secuenciales
     // con delay(300) = 6-12s de overlay. FRED admite 120 req/min; 9 en
     // paralelo carga en ~1-2s. fetchFRED ya trae retry interno por serie.
+    // v2.2 FIX (07-oct-2026), mismas series que mesa-macro-fx config/usd.json:
+    //  · C&I: TOTCI (semanal) en vez de BUSLOANS (mensual, no comparable semana a semana).
+    //  · Borrowings: H8B3094NCBA (borrowings de bancos comerciales). TLBACBW027SBOG es el
+    //    PASIVO TOTAL de los bancos, no borrowings.
+    //  · Unidades: todo el bloque H.8 se normaliza a $ miles de millones (H8B3094NCBA viene en $ millones).
     var specs=[
-      ["H8","BC","TOTBKCR",sd],["H8","LL","TOTLL",sd],["H8","CI","BUSLOANS",sd],
-      ["H8","DEP","DPSACBW027SBOG",sd],["H8","BOR","TLBACBW027SBOG",sd],
+      ["H8","BC","TOTBKCR",sd],["H8","LL","TOTLL",sd],["H8","CI","TOTCI",sd],
+      ["H8","DEP","DPSACBW027SBOG",sd],["H8","BOR","H8B3094NCBA",sd],
       ["H15","FF","DFF",ssd],["H15","TB3","DTB3",ssd],
       ["H15","T2Y","DGS2",ssd],["H15","T10Y","DGS10",ssd]
     ];
+    var H8_TO_B={TOTBKCR:1,TOTLL:1,TOTCI:1,DPSACBW027SBOG:1,H8B3094NCBA:0.001};
     var results=await Promise.allSettled(specs.map(function(s){return fetchFRED(s[2],s[3]);}));
     results.forEach(function(res,i){
       var tgt=specs[i][0]==="H8"?H8:H15;
-      tgt[specs[i][1]]=(res.status==="fulfilled"&&res.value)?res.value:[];
+      var arr=(res.status==="fulfilled"&&res.value)?res.value:[];
+      var f=specs[i][0]==="H8"?H8_TO_B[specs[i][2]]:1;
+      tgt[specs[i][1]]=(f===1)?arr:arr.map(function(o){return{date:o.date,value:o.value*f};});
     });
     var ct=0;["BC","LL","CI","DEP","BOR"].forEach(function(k){if(H8[k].length)ct++;});
     ["FF","TB3","T2Y","T10Y"].forEach(function(k){if(H15[k].length)ct++;});
@@ -299,7 +307,7 @@ function mc(wid,cfg){var w=document.getElementById(wid);if(!w)return;w.innerHTML
 
 function renderH8(){var names={BC:"Bank Credit",LL:"Loans & Leases",CI:"C&I Loans",DEP:"Deposits",BOR:"Borrowings"},colors={BC:"#fdb813",LL:"#22c55e",CI:"#8b5cf6",DEP:"#f59e0b",BOR:"#f43f5e"},ids={BC:"h8BC",LL:"h8LL",CI:"h8CI",DEP:"h8DEP",BOR:"h8BOR"},dids={BC:"h8BCd",LL:"h8LLd",CI:"h8CId",DEP:"h8DEPd",BOR:"h8BORd"},wids={BC:"wrapH8BC",LL:"wrapH8LL",CI:"wrapH8CI",DEP:"wrapH8DEP",BOR:"wrapH8BOR"};
 var chgs={};
-for(var k in H8){var arr=H8[k],L=last(arr),P=arr.length>1?arr[arr.length-2]:null;if(L){document.getElementById(ids[k]).textContent="$"+(L.value/1000).toFixed(0)+"B";if(P){var chg=((L.value-P.value)/P.value)*100;chgs[k]=chg;var el=document.getElementById(dids[k]);el.textContent=fmtPct(chg)+" wk";el.className="kpi-sub "+(chg>0.05?"pos":chg<-0.05?"neg":"watch");}}if(arr.length)mc(wids[k],{data:{labels:arr.map(function(d){return fullDate(d.date);}),datasets:[{label:names[k],data:arr.map(function(d){return d.value/1000;}),borderColor:colors[k],backgroundColor:colors[k]+"14",fill:true}]},options:{scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(0)+"B";}}}}}});}
+for(var k in H8){var arr=H8[k],L=last(arr),P=arr.length>1?arr[arr.length-2]:null;if(L){document.getElementById(ids[k]).textContent="$"+(L.value/1000).toFixed(2)+"T";/* v2.2: H.8 en $B → mostrar en $T (antes rotulaba $T como "B") */if(P){var chg=((L.value-P.value)/P.value)*100;chgs[k]=chg;var el=document.getElementById(dids[k]);el.textContent=fmtPct(chg)+" wk";el.className="kpi-sub "+(chg>0.05?"pos":chg<-0.05?"neg":"watch");}}if(arr.length)mc(wids[k],{data:{labels:arr.map(function(d){return fullDate(d.date);}),datasets:[{label:names[k],data:arr.map(function(d){return d.value/1000;}),borderColor:colors[k],backgroundColor:colors[k]+"14",fill:true}]},options:{scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(2)+"T";}}}}}});}
 if(H8.LL.length||H8.DEP.length||H8.BOR.length){var lM={},dM={},bM={};H8.LL.forEach(function(d){lM[d.date]=d.value;});H8.DEP.forEach(function(d){dM[d.date]=d.value;});H8.BOR.forEach(function(d){bM[d.date]=d.value;});var dateSet={};[lM,dM,bM].forEach(function(m){Object.keys(m).forEach(function(d){dateSet[d]=1;});});var ad=Object.keys(dateSet).sort();
 /* OLA 2: Base 100 normalization — each series normalized to its own first available data point */
 var lFirst=null,dFirst=null,bFirst=null;

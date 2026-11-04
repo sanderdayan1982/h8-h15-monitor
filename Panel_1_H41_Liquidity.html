@@ -313,7 +313,7 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
   </div>
 </div>
 
-<footer class="footer">Source: Federal Reserve H.4.1 via FRED API (serverless proxy) · v2.0-AUDIT<br>Net Liquidity = WALCL − WTREGEN − RRPONTTLD (units normalized to $M) · Release: Thursdays 16:30 ET (22:30 WAT)</footer>
+<footer class="footer">Source: Federal Reserve H.4.1 via FRED API (serverless proxy) · v2.1 (units fix 07-oct-2026)<br>Net Liquidity = WALCL − WTREGEN − RRPONTTLD (units normalized to $M) · Release: Thursdays 16:30 ET (22:30 WAT)</footer>
 
 <button class="log-toggle" onclick="document.getElementById('logP').classList.toggle('show')">📋 Log</button>
 <div class="log-panel" id="logP"></div>
@@ -463,9 +463,11 @@ async function loadAllData(isRefresh){
 
     // v2.0 AUDIT FIX C2: all 9 series in PARALLEL (was sequential + 1.5s delays = 25-45s)
     var tickers=["WALCL","WTREGEN","RRPONTTLD","WRESBAL","TREAST","MBST","PRIMARYCR","SOFR","IORB"];
-    // v2.0 AUDIT FIX C3: FRED units are MIXED \u2014 WTREGEN/RRPONTTLD/WRESBAL arrive in $Billions,
-    // the rest in $Millions. Normalize everything to $Millions so all thresholds/math are real.
-    var UNITS={WALCL:1,WTREGEN:1000,RRPONTTLD:1000,WRESBAL:1000,TREAST:1,MBST:1,PRIMARYCR:1,SOFR:1,IORB:1};
+    // v2.1 FIX (07-oct-2026): FRED publishes WALCL, WTREGEN, WRESBAL, TREAST, WSHOMCB and WLCFLPCL in $Millions;
+    // only RRPONTTLD is in $Billions. v2.0 multiplied WTREGEN/WRESBAL by 1000, which inflated TGA and reserves
+    // 1000x and broke Net Liquidity. Same factors as mesa-macro-fx ingest/providers_usd.py (UNITS_TO_M,
+    // verified against the FRED series pages). Everything is normalized to $Millions.
+    var UNITS={WALCL:1,WTREGEN:1,RRPONTTLD:1000,WRESBAL:1,TREAST:1,MBST:1,PRIMARYCR:1,SOFR:1,IORB:1};
     var ovTxt=document.getElementById("ovTxt");
     if(ovTxt) ovTxt.textContent="Fetching 9 FRED series in parallel\u2026";
     var results=await Promise.allSettled(tickers.map(function(k){return fetchFRED(TICKERS[k],sd);}));
@@ -936,8 +938,10 @@ function renderAlertsTab(){
     {ind:"ON RRP (RRPONTTLD)",level:"Rebote > $200B",signal:"Liquidez se retrae"},
     {ind:"SOFR-IORB Spread",level:"> 15 bps",signal:"Estrés interbancario"},
     {ind:"SOFR-IORB Spread",level:"> 30 bps",signal:"CRISIS liquidez"},
-    {ind:"Net Liquidity Δ%",level:"< -2% semanal",signal:"Risk-OFF — comprar USD"},
-    {ind:"Net Liquidity Δ%",level:"> +2% semanal",signal:"Risk-ON — vender USD"}
+    // v2.1 (07-oct-2026): sin dirección FX ni régimen. La fontanería describe; el régimen lo da RISK-G8
+    // y la dirección nace del embudo macro (Matriz Macro v5.1.1 pp.5/18/28).
+    {ind:"Net Liquidity Δ%",level:"< -2% semanal",signal:"Liquidez neta se contrae (contexto, sin dirección)"},
+    {ind:"Net Liquidity Δ%",level:"> +2% semanal",signal:"Liquidez neta se expande (contexto, sin dirección)"}
   ];
 
   // Compute current statuses
@@ -958,11 +962,12 @@ function renderAlertsTab(){
 
   // Forex Signal Matrix
   var wk=last(WK_CHANGES);
-  var nlSignal=wk?(wk.pct>=2?"RISK-ON":wk.pct<=-2?"RISK-OFF":"NEUTRAL"):"—";
-  var nlColor=nlSignal==="RISK-ON"?"#22c55e":nlSignal==="RISK-OFF"?"#ef4444":"#556677";
+  // v2.1: etiquetas de estado de liquidez, no régimen RISK ni dirección USD
+  var nlSignal=wk?(wk.pct>=2?"EXPANDE":wk.pct<=-2?"CONTRAE":"ESTABLE"):"—";
+  var nlColor=nlSignal==="EXPANDE"?"#22c55e":nlSignal==="CONTRAE"?"#ef4444":"#556677";
   var sofr=last(DATA.SOFR),iorb=last(DATA.IORB);
   var sp=sofr&&iorb?((sofr.value-iorb.value)*100):0;
-  var spSignal=sp>30?"USD BULLISH":sp>15?"USD WATCH":"NEUTRAL";
+  var spSignal=sp>30?"CRITICAL":sp>15?"STRESS":"NORMAL";
   var spColor=sp>30?"#ef4444":sp>15?"#f59e0b":"#22c55e";
 
   document.getElementById("signalMatrix").innerHTML=
