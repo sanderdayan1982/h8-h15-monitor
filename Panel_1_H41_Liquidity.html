@@ -671,7 +671,7 @@ function getAlerts(){
   // TGA
   var tga=last(DATA.WTREGEN);
   if(tga){
-    alerts.push({label:"TGA",value:fmtM(tga.value),status:tga.value>=900000?"HEAVY DRAIN":tga.value>=750000?"DRAIN":"SAFE",detail:tga.value>=800000?"High drain active":"Within range"});
+    alerts.push({label:"TGA",value:fmtM(tga.value),status:tga.value>=900000?"HEAVY DRAIN":tga.value>=750000?"DRAIN":"SAFE",detail:tga.value>=750000?"High drain active":"Within range"});
   }
   // ON RRP
   var rrp=last(DATA.RRPONTTLD);
@@ -934,7 +934,7 @@ function renderAlertsTab(){
     {ind:"Reserve Balances (WRESBAL)",level:"< $3.0T",signal:"Tensiones repo/Fed Funds"},
     {ind:"Reserve Balances (WRESBAL)",level:"< $2.5T",signal:"CRISIS — Fed pausa QT"},
     {ind:"Primary Credit (WLCFLPCL)",level:"+20% semanal",signal:"Banco en dificultades"},
-    {ind:"TGA (WTREGEN)",level:"> $800B subiendo",signal:"Drenaje activo Bearish"},
+    {ind:"TGA (WTREGEN)",level:"> $750B subiendo",signal:"Drenaje activo Bearish"},
     {ind:"ON RRP (RRPONTTLD)",level:"Rebote > $200B",signal:"Liquidez se retrae"},
     {ind:"SOFR-IORB Spread",level:"> 15 bps",signal:"Estrés interbancario"},
     {ind:"SOFR-IORB Spread",level:"> 30 bps",signal:"CRISIS liquidez"},
@@ -974,7 +974,7 @@ function renderAlertsTab(){
     '<div class="signal-cell" style="background:'+nlColor+'22;border:1px solid '+nlColor+'55;color:'+nlColor+'">NL Δ%<br>'+nlSignal+'</div>'+
     '<div class="signal-cell" style="background:'+spColor+'22;border:1px solid '+spColor+'55;color:'+spColor+'">SOFR-IORB<br>'+spSignal+'</div>'+
     '<div class="signal-cell" style="background:'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'22;border:1px solid '+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'55;color:'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'">WRESBAL<br>'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"NERVOUS":"AMPLE")+'</div>'+
-    '<div class="signal-cell" style="background:'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=800000?"#ef4444":"#22c55e")+'22;border:1px solid '+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=800000?"#ef4444":"#22c55e")+'55;color:'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=800000?"#ef4444":"#22c55e")+'">TGA<br>'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=800000?"HIGH DRAIN":"SAFE")+'</div>';
+    '<div class="signal-cell" style="background:'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=750000?"#ef4444":"#22c55e")+'22;border:1px solid '+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=750000?"#ef4444":"#22c55e")+'55;color:'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=750000?"#ef4444":"#22c55e")+'">TGA<br>'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=750000?"HIGH DRAIN":"SAFE")+'</div>';
 
   // Speedometer (simple SVG)
   var spBps=sp;
