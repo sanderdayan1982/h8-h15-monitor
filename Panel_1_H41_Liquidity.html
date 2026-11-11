@@ -112,6 +112,15 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
 .log-panel .ok{color:var(--green)}.log-panel .warn{color:var(--amber)}.log-panel .fail{color:var(--red)}
 
 .footer{text-align:center;padding:1rem 2rem;font-size:.64rem;color:var(--t3);border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace}
+.custody-context{padding:.45rem 2rem .55rem;border-bottom:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;gap:.15rem}
+.custody-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:.35rem .75rem}
+.custody-context .ck{font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);font-weight:600}
+.custody-context .ct{font-size:.78rem;font-weight:600}
+.custody-metrics{display:flex;flex-wrap:wrap;gap:.3rem 1.25rem;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--t2)}
+.custody-metrics b{font-weight:600;color:var(--t1);margin-left:.3rem}
+.custody-metrics .neg{color:var(--red)}.custody-metrics .pos{color:var(--green)}
+.custody-note{font-size:.62rem;color:var(--t3);font-family:'JetBrains Mono',monospace}
+@media(max-width:900px){.custody-context{padding:.5rem 1rem}}
 
 @media(max-width:900px){
   .grid,.grid-2x1,.grid-3{grid-template-columns:1fr!important;padding:.5rem 1rem 1rem}
@@ -143,6 +152,20 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
     <div class="badge">Release: <strong style="color:var(--t1);margin-left:3px">Thu 16:30 ET</strong></div>
   </div>
 </header>
+
+<section id="custodyContext" class="custody-context" data-context-only="true">
+  <div class="custody-head">
+    <span class="ck">Solo contexto</span>
+    <span class="ct">Custodia Fed · Tesoro negociable · cuentas oficiales e internacionales extranjeras</span>
+    <span class="custody-note">WMTSECL1 · semanal · millones USD · no entra en voto ni puntuación</span>
+  </div>
+  <div class="custody-metrics">
+    <span>Nivel<b id="custodyLevel">—</b> <span id="custodyAsOf"></span></span>
+    <span>Δ4s<b id="custodyD4">—</b></span>
+    <span>Δ13s<b id="custodyD13">—</b></span>
+    <span>Etiqueta <strong id="custodyLabel" class="alert-badge badge-neutral">—</strong></span>
+  </div>
+</section>
 
 <div class="kpi-strip">
   <div class="kpi"><span class="kpi-label">Fed Net Liquidity</span><div class="kpi-val" id="kNL">—</div><div class="kpi-sub" id="kNLd"></div></div>
@@ -318,6 +341,7 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
 <button class="log-toggle" onclick="document.getElementById('logP').classList.toggle('show')">📋 Log</button>
 <div class="log-panel" id="logP"></div>
 
+<script src="/custody_context.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════
    GLOBALS & UTILS
@@ -415,7 +439,7 @@ var failedSeries = [];
 
 /* v2.0 AUDIT FIX C1+C2: single same-origin proxy endpoint, no public CORS proxies,
    3 attempts with 2s/4s backoff. Key appended only if FRED_KEY is non-empty (local dev). */
-async function fetchFRED(seriesId, startDate){
+async function fetchFRED(seriesId, startDate, trackFailure){
   var url = FRED_BASE+"?series_id="+seriesId+"&file_type=json&sort_order=asc";
   if(FRED_KEY) url += "&api_key="+FRED_KEY;
   if(startDate) url += "&observation_start="+startDate;
@@ -433,7 +457,7 @@ async function fetchFRED(seriesId, startDate){
     }
   }
   log("  \u2717 "+seriesId+": FAILED", "fail");
-  failedSeries.push(seriesId);
+  if(trackFailure!==false) failedSeries.push(seriesId);
   return [];
 }
 
@@ -470,6 +494,7 @@ async function loadAllData(isRefresh){
     var UNITS={WALCL:1,WTREGEN:1,RRPONTTLD:1000,WRESBAL:1,TREAST:1,MBST:1,PRIMARYCR:1,SOFR:1,IORB:1};
     var ovTxt=document.getElementById("ovTxt");
     if(ovTxt) ovTxt.textContent="Fetching 9 FRED series in parallel\u2026";
+    var custodyPromise=fetchFRED("WMTSECL1",sd,false);
     var results=await Promise.allSettled(tickers.map(function(k){return fetchFRED(TICKERS[k],sd);}));
     results.forEach(function(r,i){
       var k=tickers[i];
@@ -477,6 +502,8 @@ async function loadAllData(isRefresh){
       var f=UNITS[k];
       DATA[k]=(f===1)?arr:arr.map(function(o){return{date:o.date,value:o.value*f};});
     });
+    DATA.WMTSECL1=await custodyPromise;
+    renderCustodyContext();
 
     var totalObs=0;
     tickers.forEach(function(k){totalObs+=DATA[k].length;});
@@ -1095,6 +1122,43 @@ function renderHistoryTab(){
     logHtml+='<div style="margin-bottom:.3rem;padding:.25rem .4rem;border-left:2px solid '+color+'">'+icon+' '+shortDate(w.date)+' → '+fmtPct(w.pct)+' → <span style="color:'+color+';font-weight:600">'+signal+'</span></div>';
   });
   document.getElementById("signalLog").innerHTML=logHtml;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CUSTODIA EXTRANJERA — solo contexto (WMTSECL1)
+   ═══════════════════════════════════════════════════════════ */
+function fmtCustodyInt(n, signed){
+  if(typeof n!=="number"||!isFinite(n)) return "—";
+  var neg=n<0;
+  var abs=Math.abs(n);
+  var body=(abs===Math.round(abs)?String(Math.round(abs)):String(abs)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+  if(signed) return (neg?"-":n>0?"+":"")+body;
+  return (neg?"-":"")+body;
+}
+function renderCustodyContext(){
+  var levelEl=document.getElementById("custodyLevel");
+  if(!levelEl||!window.custodyContext) return;
+  var snap=window.custodyContext.snapshot(DATA.WMTSECL1||[]);
+  var d4el=document.getElementById("custodyD4");
+  var d13el=document.getElementById("custodyD13");
+  var lab=document.getElementById("custodyLabel");
+  var asOf=document.getElementById("custodyAsOf");
+  levelEl.textContent=fmtCustodyInt(snap.level,false);
+  asOf.textContent=snap.as_of?snap.as_of:"";
+  function paintDelta(el, ch){
+    if(!ch){el.textContent="—";el.className="";return;}
+    el.textContent=fmtCustodyInt(ch.delta,true)+" · vs "+ch.prior_date;
+    el.className=ch.delta<0?"neg":ch.delta>0?"pos":"";
+  }
+  paintDelta(d4el, snap.delta_4w);
+  paintDelta(d13el, snap.delta_13w);
+  if(snap.label==="CUSTODY_DRAIN"){
+    lab.textContent="CUSTODY_DRAIN";
+    lab.className="alert-badge badge-drain";
+  }else{
+    lab.textContent="—";
+    lab.className="alert-badge badge-neutral";
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
