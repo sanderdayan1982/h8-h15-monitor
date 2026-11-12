@@ -575,6 +575,24 @@ function findClosest(map,targetDate){
   return best;
 }
 
+/* SOFR−IORB: solo la misma fecha. La última fecha común; nunca días distintos. */
+function commonRateSeries(sofr, iorb){
+  if(!sofr||!iorb) return [];
+  var iMap={};
+  iorb.forEach(function(d){if(d&&d.date!=null&&isFinite(d.value)) iMap[d.date]=d.value;});
+  var out=[];
+  sofr.forEach(function(d){
+    if(!d||d.date==null||!isFinite(d.value)||iMap[d.date]==null) return;
+    out.push({date:d.date, sofr:d.value, iorb:iMap[d.date]});
+  });
+  out.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
+  return out;
+}
+function lastCommonRates(sofr, iorb){
+  var pts=commonRateSeries(sofr, iorb);
+  return pts.length?pts[pts.length-1]:null;
+}
+
 function computeWeeklyChanges(){
   WK_CHANGES=[];
   for(var i=1;i<NL_SERIES.dates.length;i++){
@@ -645,14 +663,14 @@ function renderKPIs(){
     rbEl.textContent=rbStatus;
     rbEl.className="kpi-sub "+(rbStatus==="AMPLE"?"pos":rbStatus==="NERVOUS"?"watch":"neg");
   }
-  // SOFR-IORB Spread
-  var sofr=last(DATA.SOFR),iorb=last(DATA.IORB);
-  if(sofr&&iorb){
-    var spread=Math.round((sofr.value-iorb.value)*100); // v2.0 AUDIT FIX A2: numeric bps, not string
+  // SOFR-IORB Spread — última fecha presente en las dos series
+  var common=lastCommonRates(DATA.SOFR, DATA.IORB);
+  if(common){
+    var spread=Math.round((common.sofr-common.iorb)*100); // v2.0 AUDIT FIX A2: numeric bps, not string
     document.getElementById("kSP").textContent=spread+" bps";
     var spEl=document.getElementById("kSPd");
     var spStatus=spread>30?"CRITICAL":spread>15?"STRESS":"NORMAL";
-    spEl.textContent=spStatus;
+    spEl.textContent=spStatus+" · "+common.date;
     spEl.className="kpi-sub "+(spStatus==="NORMAL"?"pos":spStatus==="STRESS"?"watch":"neg");
   }
   // TGA
@@ -684,10 +702,10 @@ function getAlerts(){
     var pcChg=pcPrev>0?((pcCurr-pcPrev)/pcPrev)*100:0;
     alerts.push({label:"Primary Credit",value:fmtM(pcCurr),status:pcChg>20?"PANIC":"LOW",detail:fmtPct(pcChg)+" weekly"});
   }
-  // SOFR-IORB
-  var sofr=last(DATA.SOFR),iorb=last(DATA.IORB);
-  if(sofr&&iorb){
-    var sp=Math.round((sofr.value-iorb.value)*100); /* v2.0 AUDIT FIX A2 */
+  // SOFR-IORB — misma fecha que el KPI
+  var common=lastCommonRates(DATA.SOFR, DATA.IORB);
+  if(common){
+    var sp=Math.round((common.sofr-common.iorb)*100); /* v2.0 AUDIT FIX A2 */
     alerts.push({label:"SOFR−IORB",value:sp+"bps",status:sp>30?"CRITICAL":sp>15?"STRESS":"NORMAL",detail:sp>30?"Crisis level":sp>15?"Elevated":"Normal range"});
   }
   // Net Liq Weekly
@@ -769,15 +787,11 @@ function renderMainTab(){
     }}},scales:{y:{ticks:{callback:function(v){return"$"+v.toFixed(1)+"T";}}}}}});
   }
 
-  // SOFR-IORB Spread chart
-  var sofrD=DATA.SOFR,iorbD=DATA.IORB;
-  if(sofrD.length&&iorbD.length){
-    var iorbMap={};iorbD.forEach(function(d){iorbMap[d.date]=d.value;});
-    var spDates=[],spVals=[];
-    sofrD.forEach(function(d){
-      var ib=findClosest(iorbMap,d.date);
-      if(ib!==null&&ib>0){spDates.push(d.date);spVals.push(Math.round((d.value-ib)*1000)/10);}
-    });
+  // SOFR-IORB Spread chart — solo fechas comunes
+  var spPts=commonRateSeries(DATA.SOFR, DATA.IORB);
+  if(spPts.length){
+    var spDates=spPts.map(function(p){return p.date;});
+    var spVals=spPts.map(function(p){return Math.round((p.sofr-p.iorb)*1000)/10;});
     var spLast=spVals.length?spVals[spVals.length-1]:"—";
     document.getElementById("spVal").textContent=spLast+" bps";
     makeChart("wrapSP",{type:"bar",data:{
@@ -917,15 +931,11 @@ function renderDrainsTab(){
     },options:{scales:{x:{stacked:true},y:{stacked:true,ticks:{callback:function(v){return"$"+v+"B";}}}}}});
   }
 
-  // SOFR-IORB full spread
-  var sofrD=DATA.SOFR,iorbD=DATA.IORB;
-  if(sofrD.length&&iorbD.length){
-    var iorbMap={};iorbD.forEach(function(d){iorbMap[d.date]=d.value;});
-    var spD=[],spV=[];
-    sofrD.forEach(function(d){
-      var ib=findClosest(iorbMap,d.date);
-      if(ib!==null&&ib>0){spD.push(d.date);spV.push((d.value-ib)*100);}
-    });
+  // SOFR-IORB full spread — solo fechas comunes
+  var spPts=commonRateSeries(DATA.SOFR, DATA.IORB);
+  if(spPts.length){
+    var spD=spPts.map(function(p){return p.date;});
+    var spV=spPts.map(function(p){return (p.sofr-p.iorb)*100;});
     makeChart("wrapSPfull",{type:"line",data:{
       labels:spD.map(shortDate),
       datasets:[{label:"SOFR−IORB",data:spV,borderColor:"#f43f5e",backgroundColor:"rgba(244,63,94,.08)",fill:true}]
@@ -942,11 +952,12 @@ function renderDrainsTab(){
     last10.forEach(function(d,i){
       var idx=spD.indexOf(d);
       var sv=spV[idx];
-      var sofrV=sofrD.find(function(x){return x.date===d;});
-      var iorbV=findClosest(iorbMap,d);
+      var pt=spPts[idx];
+      var sofrV=pt?pt.sofr:null;
+      var iorbV=pt?pt.iorb:null;
       var st=sv>30?"CRITICAL":sv>15?"STRESS":"NORMAL";
       var cc=sv>30?"neg":sv>15?"watch":"pos";
-      stHtml+="<tr><td>"+d+"</td><td>"+(sofrV?sofrV.value.toFixed(2):"—")+"</td><td>"+iorbV.toFixed(2)+"</td><td class='"+cc+"'>"+sv.toFixed(1)+"</td><td class='"+cc+"'>"+st+"</td></tr>";
+      stHtml+="<tr><td>"+d+"</td><td>"+(sofrV!=null?sofrV.toFixed(2):"—")+"</td><td>"+(iorbV!=null?iorbV.toFixed(2):"—")+"</td><td class='"+cc+"'>"+sv.toFixed(1)+"</td><td class='"+cc+"'>"+st+"</td></tr>";
     });
     stHtml+="</tbody></table>";
     document.getElementById("spreadTableWrap").innerHTML=stHtml;
@@ -992,8 +1003,8 @@ function renderAlertsTab(){
   // v2.1: etiquetas de estado de liquidez, no régimen RISK ni dirección USD
   var nlSignal=wk?(wk.pct>=2?"EXPANDE":wk.pct<=-2?"CONTRAE":"ESTABLE"):"—";
   var nlColor=nlSignal==="EXPANDE"?"#22c55e":nlSignal==="CONTRAE"?"#ef4444":"#556677";
-  var sofr=last(DATA.SOFR),iorb=last(DATA.IORB);
-  var sp=sofr&&iorb?((sofr.value-iorb.value)*100):0;
+  var commonSp=lastCommonRates(DATA.SOFR, DATA.IORB);
+  var sp=commonSp?((commonSp.sofr-commonSp.iorb)*100):0;
   var spSignal=sp>30?"CRITICAL":sp>15?"STRESS":"NORMAL";
   var spColor=sp>30?"#ef4444":sp>15?"#f59e0b":"#22c55e";
 

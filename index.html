@@ -290,7 +290,8 @@ function updateTimestampBar(seriesLoaded){
     var ageDays=Math.floor((now-maxD)/(1000*60*60*24));
     var ageEl=document.getElementById("tsAge");
     ageEl.textContent=ageDays+"d old";
-    ageEl.className="ts-age "+(ageDays<=7?"fresh":ageDays<=14?"stale":"old");
+    /* H.8 es semanal y sale con retraso: rojo solo a partir de 16 días desde la fecha del dato. */
+    ageEl.className="ts-age "+(ageDays<=7?"fresh":ageDays<16?"stale":"old");
   }else{
     document.getElementById("tsRecent").textContent="no data";
     document.getElementById("tsAge").textContent="—";
