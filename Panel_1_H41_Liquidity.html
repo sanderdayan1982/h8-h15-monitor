@@ -168,7 +168,7 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
 </section>
 
 <div class="kpi-strip">
-  <div class="kpi"><span class="kpi-label">Fed Net Liquidity</span><div class="kpi-val" id="kNL">—</div><div class="kpi-sub" id="kNLd"></div></div>
+  <div class="kpi"><span class="kpi-label">Fed Net Liquidity</span><div class="kpi-val" id="kNL">—</div><div class="kpi-sub" id="kNLd"></div><div class="kpi-sub" id="kNLdates"></div></div>
   <div class="kpi"><span class="kpi-label">Reserve Balances</span><div class="kpi-val" id="kRB">—</div><div class="kpi-sub" id="kRBd"></div></div>
   <div class="kpi"><span class="kpi-label">SOFR − IORB Spread</span><div class="kpi-val" id="kSP">—</div><div class="kpi-sub" id="kSPd"></div></div>
   <div class="kpi"><span class="kpi-label">TGA Balance</span><div class="kpi-val" id="kTGA">—</div><div class="kpi-sub" id="kTGAd"></div></div>
@@ -189,7 +189,7 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
   <div class="sec-hdr"><div class="sec-dot" style="background:var(--cyan)"></div><h2>Net Liquidity Overview</h2></div>
   <div class="grid grid-2x1">
     <div class="card tall">
-      <div class="card-hdr"><div><div class="card-title">Fed Net Liquidity (WALCL − TGA − RRP)</div><div class="card-sub">Weekly · Jan 2024 → Present</div></div><div class="card-val"><span class="v" id="nlVal">—</span><br><span class="u">USD Billions</span></div></div>
+      <div class="card-hdr"><div><div class="card-title">Fed Net Liquidity (WALCL − TGA − RRP)</div><div class="card-sub">Weekly · Jan 2024 → Present</div><div class="card-sub" id="nlLegs"></div></div><div class="card-val"><span class="v" id="nlVal">—</span><br><span class="u">USD Billions</span></div></div>
       <div class="wrap" id="wrapNL"><div class="no-data">Loading…</div></div>
     </div>
     <div>
@@ -543,36 +543,100 @@ async function loadAllData(isRefresh){
    COMPUTATIONS
    ═══════════════════════════════════════════════════════════ */
 function computeNetLiquidity(){
-  var wMap={},tMap={},rMap={};
-  DATA.WALCL.forEach(function(d){wMap[d.date]=d.value;});
-  DATA.WTREGEN.forEach(function(d){tMap[d.date]=d.value;});
-  DATA.RRPONTTLD.forEach(function(d){rMap[d.date]=d.value;});
-
-  // Use WALCL dates as reference (weekly)
+  /* orden INTEGRIDAD-01 de Sander 14-nov-2026: fecha común obligatoria.
+     Si falta una pata, ese punto no existe: no se rellena con 0, último valor ni fecha cercana. */
+  function obsMap(rows){
+    var map={};
+    (rows||[]).forEach(function(d){
+      if(!d||d.date==null||d.value==null||!isFinite(d.value)) return;
+      map[d.date]=d.value;
+    });
+    return map;
+  }
+  function latestDate(map){
+    var keys=Object.keys(map);
+    if(!keys.length) return null;
+    keys.sort();
+    return keys[keys.length-1];
+  }
+  var wMap=obsMap(DATA.WALCL),tMap=obsMap(DATA.WTREGEN),rMap=obsMap(DATA.RRPONTTLD);
   var dates=Object.keys(wMap).sort();
   var nlDates=[],nlValues=[];
   dates.forEach(function(d){
-    var w=wMap[d]||0,t=findClosest(tMap,d),r=findClosest(rMap,d);
-    /* v2.0 AUDIT FIX C3+A1: all series now in $M, and dates without TGA/RRP coverage are
-       SKIPPED instead of subtracting fake zeros (which made NL \u2248 WALCL alone) */
+    var w=wMap[d],t=findClosest(tMap,d),r=findClosest(rMap,d);
+    /* v2.0 AUDIT FIX C3+A1: all series now in $M. Sin TGA o RRP en esa misma fecha, el punto se omite. */
     if(w>0 && t!==null && r!==null){
       nlDates.push(d);
-      nlValues.push((w-t-r)/1000); // $M \u2192 $B
+      nlValues.push((w-t-r)/1000); // $M → $B
     }
   });
-  NL_SERIES={dates:nlDates,values:nlValues};
+  var ref=latestDate(wMap);
+  var complete=ref!=null && nlDates.length>0 && nlDates[nlDates.length-1]===ref;
+  NL_SERIES={
+    dates:nlDates,
+    values:nlValues,
+    walclDates:dates,
+    referenceDate:ref,
+    referenceComplete:complete,
+    components:complete
+      ?{WALCL:ref,WTREGEN:ref,RRPONTTLD:ref}
+      :{WALCL:ref,WTREGEN:latestDate(tMap),RRPONTTLD:latestDate(rMap)}
+  };
 }
 
 function findClosest(map,targetDate){
-  /* v2.0 AUDIT FIX A1: returns null (not 0) when no observation \u2264 date \u2014 prevents fake zeros */
-  if(!map||typeof map!=="object") return null;
-  if(map[targetDate]!==undefined) return map[targetDate];
-  var keys=Object.keys(map).sort();
-  var best=null;
-  for(var i=0;i<keys.length;i++){
-    if(keys[i]<=targetDate) best=map[keys[i]];
+  /* orden INTEGRIDAD-01 de Sander 14-nov-2026: solo la fecha exacta.
+     Sin observación ese día devuelve null. Prohibido el dato anterior. */
+  if(!map||typeof map!=="object"||targetDate==null) return null;
+  if(!Object.prototype.hasOwnProperty.call(map,targetDate)) return null;
+  var v=map[targetDate];
+  if(v==null||!isFinite(v)) return null;
+  return v;
+}
+
+function formatNlComponentDates(components){
+  var c=components||{};
+  function leg(v){return v||"—";}
+  return "WALCL "+leg(c.WALCL)+" · TGA "+leg(c.WTREGEN)+" · RRP "+leg(c.RRPONTTLD);
+}
+
+function nlWeeklyState(referenceComplete, wk){
+  if(!referenceComplete||!wk||!isFinite(wk.pct)) return null;
+  return wk.pct>=2?"EXPANDE":wk.pct<=-2?"CONTRAE":"ESTABLE";
+}
+
+function nlHistoryDelta(date, nl, changes, walclDates){
+  if(nl==null||!isFinite(nl)) return {pct:null,signal:null};
+  var wk=null;
+  (changes||[]).forEach(function(w){if(w&&w.date===date) wk=w;});
+  if(wk&&isFinite(wk.pct)) return {pct:wk.pct,signal:wk.pct>=2?"RISK-ON":wk.pct<=-2?"RISK-OFF":"NEUTRAL"};
+  var idx=(walclDates||[]).indexOf(date);
+  if(idx>0) return {pct:null,signal:null};
+  return {pct:0,signal:"NEUTRAL"};
+}
+
+function sofrIorbState(common){
+  if(!common||!isFinite(common.sofr)||!isFinite(common.iorb)) return {bps:null,state:null};
+  var sp=(common.sofr-common.iorb)*100;
+  return {bps:sp,state:sp>30?"CRITICAL":sp>15?"STRESS":"NORMAL"};
+}
+
+function assetsRecordRow(date, prevDate, waMap, trMap, mbMap, pcMap){
+  function exact(map, d){
+    if(!map||d==null||!Object.prototype.hasOwnProperty.call(map, d)) return null;
+    var v=map[d];
+    if(v==null||!isFinite(v)) return null;
+    return v;
   }
-  return best;
+  var wV=exact(waMap, date), tV=exact(trMap, date), mV=exact(mbMap, date), pV=exact(pcMap, date);
+  var prev=exact(waMap, prevDate);
+  return {
+    walcl:wV==null?null:wV/1000,
+    treasuries:tV==null?null:tV/1000,
+    mbs:mV==null?null:mV/1000,
+    primary:pV,
+    delta:(wV!=null&&prev!=null&&prev>0)?(wV-prev)/1000:null
+  };
 }
 
 /* SOFR−IORB: solo la misma fecha. La última fecha común; nunca días distintos. */
@@ -595,11 +659,16 @@ function lastCommonRates(sofr, iorb){
 
 function computeWeeklyChanges(){
   WK_CHANGES=[];
-  for(var i=1;i<NL_SERIES.dates.length;i++){
-    var prev=NL_SERIES.values[i-1];
-    var curr=NL_SERIES.values[i];
+  var val={};
+  for(var i=0;i<NL_SERIES.dates.length;i++) val[NL_SERIES.dates[i]]=NL_SERIES.values[i];
+  var all=(NL_SERIES.walclDates&&NL_SERIES.walclDates.length)?NL_SERIES.walclDates:NL_SERIES.dates;
+  for(var j=1;j<all.length;j++){
+    var prevD=all[j-1], currD=all[j];
+    if(!Object.prototype.hasOwnProperty.call(val,prevD)||!Object.prototype.hasOwnProperty.call(val,currD)) continue;
+    var prev=val[prevD], curr=val[currD];
+    if(prev==null||curr==null||!isFinite(prev)||!isFinite(curr)) continue;
     var pct=prev!==0?((curr-prev)/prev)*100:0;
-    WK_CHANGES.push({date:NL_SERIES.dates[i],value:curr,prev:prev,pct:pct});
+    WK_CHANGES.push({date:currD,value:curr,prev:prev,pct:pct});
   }
 }
 
@@ -643,16 +712,27 @@ function shortDate(d){var p=d.split("-");return p[1]+"/"+p[2];}
    KPIs
    ═══════════════════════════════════════════════════════════ */
 function renderKPIs(){
-  // Net Liquidity
-  var nl=last(NL_SERIES.values);
-  var wk=last(WK_CHANGES);
-  if(nl!==null){
+  // Net Liquidity — solo si las tres patas comparten la fecha de referencia
+  var compTxt=formatNlComponentDates(NL_SERIES.components);
+  var datesEl=document.getElementById("kNLdates");
+  if(datesEl) datesEl.textContent=compTxt;
+  var legsEl=document.getElementById("nlLegs");
+  if(legsEl) legsEl.textContent=compTxt;
+  var nl=NL_SERIES.referenceComplete?last(NL_SERIES.values):null;
+  var wk=NL_SERIES.referenceComplete?last(WK_CHANGES):null;
+  var el=document.getElementById("kNLd");
+  if(nl!==null&&isFinite(nl)){
     document.getElementById("kNL").textContent=fmtB(nl);
     if(wk){
-      var el=document.getElementById("kNLd");
       el.textContent=fmtPct(wk.pct)+" weekly";
       el.className="kpi-sub "+(wk.pct>=2?"pos":wk.pct<=-2?"neg":"watch");
+    }else if(el){
+      el.textContent="";
+      el.className="kpi-sub";
     }
+  }else{
+    document.getElementById("kNL").textContent="—";
+    if(el){el.textContent="NO DATA";el.className="kpi-sub";}
   }
   // Reserve Balances
   var rb=last(DATA.WRESBAL);
@@ -708,8 +788,8 @@ function getAlerts(){
     var sp=Math.round((common.sofr-common.iorb)*100); /* v2.0 AUDIT FIX A2 */
     alerts.push({label:"SOFR−IORB",value:sp+"bps",status:sp>30?"CRITICAL":sp>15?"STRESS":"NORMAL",detail:sp>30?"Crisis level":sp>15?"Elevated":"Normal range"});
   }
-  // Net Liq Weekly
-  var wk=last(WK_CHANGES);
+  // Net Liq Weekly — no reutiliza la semana anterior si la de referencia está incompleta
+  var wk=NL_SERIES.referenceComplete?last(WK_CHANGES):null;
   if(wk){
     alerts.push({label:"Net Liq Δ%",value:fmtPct(wk.pct),status:wk.pct>=2?"RISK-ON":wk.pct<=-2?"RISK-OFF":"WATCH",detail:wk.pct>=2?"Bullish risk":wk.pct<=-2?"Bearish risk":"Neutral"});
   }
@@ -746,21 +826,33 @@ function renderAlertPanel(containerId){
    TAB 1: MAIN OVERVIEW
    ═══════════════════════════════════════════════════════════ */
 function renderMainTab(){
-  // Net Liquidity chart
-  var nlLast=last(NL_SERIES.values)||0;
-  document.getElementById("nlVal").textContent=fmtB(nlLast);
-  var plus2=nlLast*1.02,minus2=nlLast*0.98;
-
+  // Net Liquidity chart — un hueco es null, no el último valor ni 0
+  var valAt={};
+  NL_SERIES.dates.forEach(function(d,i){valAt[d]=NL_SERIES.values[i];});
+  var axis=(NL_SERIES.walclDates&&NL_SERIES.walclDates.length)?NL_SERIES.walclDates:NL_SERIES.dates;
+  var chartDates=[],chartVals=[];
+  axis.forEach(function(d){
+    chartDates.push(d);
+    chartVals.push(Object.prototype.hasOwnProperty.call(valAt,d)?valAt[d]:null);
+  });
+  var nlKnown=!!NL_SERIES.referenceComplete&&isFinite(last(NL_SERIES.values));
+  var nlLast=nlKnown?last(NL_SERIES.values):null;
+  document.getElementById("nlVal").textContent=nlKnown?fmtB(nlLast):"—";
+  var annotations={};
+  if(nlKnown){
+    var plus2=nlLast*1.02,minus2=nlLast*0.98;
+    annotations={
+      plus2:{type:"line",yMin:plus2,yMax:plus2,borderColor:"rgba(34,197,94,.4)",borderDash:[5,5],borderWidth:1,label:{display:true,content:"+2%",position:"end",font:{size:9},color:"#22c55e"}},
+      minus2:{type:"line",yMin:minus2,yMax:minus2,borderColor:"rgba(239,68,68,.4)",borderDash:[5,5],borderWidth:1,label:{display:true,content:"-2%",position:"end",font:{size:9},color:"#ef4444"}}
+    };
+  }
   makeChart("wrapNL",{type:"line",data:{
-    labels:NL_SERIES.dates.map(shortDate),
+    labels:chartDates.map(shortDate),
     datasets:[{
-      label:"Net Liquidity",data:NL_SERIES.values,
+      label:"Net Liquidity",data:chartVals,
       borderColor:"#fdb813",backgroundColor:"rgba(253,184,19,.1)",fill:true
     }]
-  },options:{plugins:{annotation:{annotations:{
-    plus2:{type:"line",yMin:plus2,yMax:plus2,borderColor:"rgba(34,197,94,.4)",borderDash:[5,5],borderWidth:1,label:{display:true,content:"+2%",position:"end",font:{size:9},color:"#22c55e"}},
-    minus2:{type:"line",yMin:minus2,yMax:minus2,borderColor:"rgba(239,68,68,.4)",borderDash:[5,5],borderWidth:1,label:{display:true,content:"-2%",position:"end",font:{size:9},color:"#ef4444"}}
-  }}},scales:{y:{ticks:{callback:function(v){return fmtB(v);}}}}}});
+  },options:{plugins:{annotation:{annotations:annotations}},scales:{y:{ticks:{callback:function(v){return fmtB(v);}}}}}});
 
   // Alert Panel
   renderAlertPanel("alertPanel");
@@ -803,8 +895,8 @@ function renderMainTab(){
 
   // Weekly Change histogram
   if(WK_CHANGES.length){
-    var wkLast=WK_CHANGES[WK_CHANGES.length-1];
-    document.getElementById("wkVal").textContent=fmtPct(wkLast.pct);
+    var wkLast=NL_SERIES.referenceComplete?WK_CHANGES[WK_CHANGES.length-1]:null;
+    document.getElementById("wkVal").textContent=wkLast?fmtPct(wkLast.pct):"—";
     makeChart("wrapWK",{type:"bar",data:{
       labels:WK_CHANGES.map(function(w){return shortDate(w.date);}),
       datasets:[{label:"Weekly Δ%",data:WK_CHANGES.map(function(w){return w.pct;}),
@@ -870,11 +962,12 @@ function renderAssetsTab(){
   pc.forEach(function(d){pcMap[d.date]=d.value;});
   var allDates=Object.keys(waMap).sort().reverse().slice(0,20);
   allDates.forEach(function(d,i){
-    var wV=waMap[d]||0,tV=trMap[d]||0,mV=mbMap[d]||0,pV=pcMap[d]||0;
-    var prev=allDates[i+1]?waMap[allDates[i+1]]||0:0;
-    var delta=prev>0?((wV-prev)/1000).toFixed(1):"—";
+    var prevDate=allDates[i+1]||null;
+    var row=assetsRecordRow(d, prevDate, waMap, trMap, mbMap, pcMap);
+    function cell(v, digits){return v==null||!isFinite(v)?"—":v.toFixed(digits);}
+    var delta=row.delta==null?"—":row.delta.toFixed(1);
     var cls=i===0?" class='latest'":"";
-    html+="<tr"+cls+"><td>"+d+"</td><td>"+(wV/1000).toFixed(1)+"</td><td>"+(tV/1000).toFixed(1)+"</td><td>"+(mV/1000).toFixed(1)+"</td><td>"+pV.toFixed(0)+"</td><td"+(delta!=="—"&&parseFloat(delta)<0?" class='neg'":" class='pos'")+">"+delta+"</td></tr>";
+    html+="<tr"+cls+"><td>"+d+"</td><td>"+cell(row.walcl,1)+"</td><td>"+cell(row.treasuries,1)+"</td><td>"+cell(row.mbs,1)+"</td><td>"+cell(row.primary,0)+"</td><td"+(delta!=="—"&&parseFloat(delta)<0?" class='neg'":" class='pos'")+">"+delta+"</td></tr>";
   });
   html+="</tbody></table>";
   document.getElementById("assetsTableWrap").innerHTML=html;
@@ -999,14 +1092,16 @@ function renderAlertsTab(){
   document.getElementById("alertsTableWrap").innerHTML=html;
 
   // Forex Signal Matrix
-  var wk=last(WK_CHANGES);
+  var wk=NL_SERIES.referenceComplete?last(WK_CHANGES):null;
   // v2.1: etiquetas de estado de liquidez, no régimen RISK ni dirección USD
-  var nlSignal=wk?(wk.pct>=2?"EXPANDE":wk.pct<=-2?"CONTRAE":"ESTABLE"):"—";
+  var nlState=nlWeeklyState(!!NL_SERIES.referenceComplete, wk);
+  var nlSignal=nlState==null?(NL_SERIES.referenceComplete?"—":"NO DATA"):nlState;
   var nlColor=nlSignal==="EXPANDE"?"#22c55e":nlSignal==="CONTRAE"?"#ef4444":"#556677";
   var commonSp=lastCommonRates(DATA.SOFR, DATA.IORB);
-  var sp=commonSp?((commonSp.sofr-commonSp.iorb)*100):0;
-  var spSignal=sp>30?"CRITICAL":sp>15?"STRESS":"NORMAL";
-  var spColor=sp>30?"#ef4444":sp>15?"#f59e0b":"#22c55e";
+  var sig=sofrIorbState(commonSp);
+  var sp=sig.bps;
+  var spSignal=sig.state==null?"NO DATA":sig.state;
+  var spColor=sig.state==="CRITICAL"?"#ef4444":sig.state==="STRESS"?"#f59e0b":sig.state==="NORMAL"?"#22c55e":"#556677";
 
   document.getElementById("signalMatrix").innerHTML=
     '<div class="signal-cell" style="background:'+nlColor+'22;border:1px solid '+nlColor+'55;color:'+nlColor+'">NL Δ%<br>'+nlSignal+'</div>'+
@@ -1014,18 +1109,18 @@ function renderAlertsTab(){
     '<div class="signal-cell" style="background:'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'22;border:1px solid '+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'55;color:'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"#f59e0b":"#22c55e")+'">WRESBAL<br>'+(last(DATA.WRESBAL)&&last(DATA.WRESBAL).value<3000000?"NERVOUS":"AMPLE")+'</div>'+
     '<div class="signal-cell" style="background:'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=750000?"#ef4444":"#22c55e")+'22;border:1px solid '+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=750000?"#ef4444":"#22c55e")+'55;color:'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=750000?"#ef4444":"#22c55e")+'">TGA<br>'+(last(DATA.WTREGEN)&&last(DATA.WTREGEN).value>=750000?"HIGH DRAIN":"SAFE")+'</div>';
 
-  // Speedometer (simple SVG)
-  var spBps=sp;
-  var angle=Math.min(Math.max(spBps/40,0),1)*180-90; // -90 to 90
+  // Speedometer (simple SVG). Sin fecha común no hay lectura: ni 0 bps ni aguja.
+  var spKnown=sp!=null&&isFinite(sp);
+  var angle=spKnown?Math.min(Math.max(sp/40,0),1)*180-90:0; // -90 to 90
   document.getElementById("speedometer").innerHTML=
     '<svg viewBox="0 0 200 120" width="200"><defs>'+
     '<linearGradient id="sg" x1="0" y1="0" x2="1" y2="0">'+
     '<stop offset="0%" stop-color="#22c55e"/><stop offset="37%" stop-color="#f59e0b"/><stop offset="75%" stop-color="#f97316"/><stop offset="100%" stop-color="#ef4444"/>'+
     '</linearGradient></defs>'+
     '<path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#sg)" stroke-width="14" stroke-linecap="round"/>'+
-    '<line x1="100" y1="100" x2="'+(100+65*Math.cos(angle*Math.PI/180))+'" y2="'+(100+65*Math.sin(angle*Math.PI/180))+'" stroke="#e2e8f0" stroke-width="3" stroke-linecap="round"/>'+
+    (spKnown?'<line x1="100" y1="100" x2="'+(100+65*Math.cos(angle*Math.PI/180))+'" y2="'+(100+65*Math.sin(angle*Math.PI/180))+'" stroke="#e2e8f0" stroke-width="3" stroke-linecap="round"/>':'')+
     '<circle cx="100" cy="100" r="5" fill="#e2e8f0"/>'+
-    '<text x="100" y="88" text-anchor="middle" fill="#e2e8f0" font-size="16" font-weight="bold" font-family="JetBrains Mono">'+spBps.toFixed(0)+' bps</text>'+
+    '<text x="100" y="88" text-anchor="middle" fill="#e2e8f0" font-size="16" font-weight="bold" font-family="JetBrains Mono">'+(spKnown?sp.toFixed(0)+" bps":"—")+'</text>'+
     '<text x="20" y="115" fill="#556677" font-size="8" font-family="JetBrains Mono">0</text>'+
     '<text x="85" y="18" fill="#556677" font-size="8" font-family="JetBrains Mono">20</text>'+
     '<text x="170" y="115" fill="#556677" font-size="8" font-family="JetBrains Mono">40</text>'+
@@ -1072,7 +1167,8 @@ function renderAlertsTab(){
    TAB 5: HISTORICAL RECORDS
    ═══════════════════════════════════════════════════════════ */
 function renderHistoryTab(){
-  if(!NL_SERIES.dates.length) return;
+  var axis=(NL_SERIES.walclDates&&NL_SERIES.walclDates.length)?NL_SERIES.walclDates:NL_SERIES.dates;
+  if(!axis.length) return;
 
   // Build full history table
   var waMap={},trMap={},mbMap={},pcMap={},tgaMap={},rrpMap={},rbMap={};
@@ -1086,27 +1182,30 @@ function renderHistoryTab(){
 
   var html='<table class="htable"><thead><tr><th>Week #</th><th>Date (Thursday)</th><th>WALCL ($B)</th><th>Treasuries ($B)</th><th>MBS ($B)</th><th>Primary Cr ($M)</th><th>TGA ($B)</th><th>ON RRP ($B)</th><th>Reserves ($B)</th><th>Net Liq ($B)</th><th>Net Liq Δ%</th><th>Signal</th></tr></thead><tbody>';
 
-  var dates=NL_SERIES.dates.slice().reverse();
+  var dates=axis.slice().reverse();
   dates.forEach(function(d,i){
     var idx=NL_SERIES.dates.indexOf(d);
-    var nl=NL_SERIES.values[idx];
-    var wkC=WK_CHANGES.find(function(w){return w.date===d;});
-    var pct=wkC?wkC.pct:0;
-    var signal=pct>=2?"RISK-ON":pct<=-2?"RISK-OFF":"NEUTRAL";
+    var nl=idx===-1?null:NL_SERIES.values[idx];
+    var delta=nlHistoryDelta(d, nl, WK_CHANGES, axis);
+    var signal=delta.signal==null?"—":delta.signal;
     var sigCls=signal==="RISK-ON"?"pos":signal==="RISK-OFF"?"neg":"";
     var cls=i===0?" class='latest'":"";
     var wNum=dates.length-i;
+    function exactBillions(map){
+      if(!Object.prototype.hasOwnProperty.call(map,d)||map[d]==null||!isFinite(map[d])) return "—";
+      return (map[d]/1000).toFixed(1);
+    }
 
     html+="<tr"+cls+"><td>"+wNum+"</td><td>"+d+"</td>"+
       "<td>"+(waMap[d]?(waMap[d]/1000).toFixed(1):"—")+"</td>"+
       "<td>"+(trMap[d]?(trMap[d]/1000).toFixed(1):"—")+"</td>"+
       "<td>"+(mbMap[d]?(mbMap[d]/1000).toFixed(1):"—")+"</td>"+
       "<td>"+(pcMap[d]?pcMap[d].toFixed(0):"—")+"</td>"+
-      "<td>"+(tgaMap[d]?(tgaMap[d]/1000).toFixed(1):findClosest(tgaMap,d)?(findClosest(tgaMap,d)/1000).toFixed(1):"—")+"</td>"+
-      "<td>"+(rrpMap[d]?(rrpMap[d]/1000).toFixed(1):findClosest(rrpMap,d)?(findClosest(rrpMap,d)/1000).toFixed(1):"—")+"</td>"+
+      "<td>"+exactBillions(tgaMap)+"</td>"+
+      "<td>"+exactBillions(rrpMap)+"</td>"+
       "<td>"+(rbMap[d]?(rbMap[d]/1000).toFixed(1):"—")+"</td>"+
-      "<td>"+nl.toFixed(1)+"</td>"+
-      "<td class='"+(pct>=0?"pos":"neg")+"'>"+fmtPct(pct)+"</td>"+
+      "<td>"+(nl==null||!isFinite(nl)?"—":nl.toFixed(1))+"</td>"+
+      "<td class='"+(delta.pct==null?"":(delta.pct>=0?"pos":"neg"))+"'>"+(delta.pct==null?"—":fmtPct(delta.pct))+"</td>"+
       "<td class='"+sigCls+"'>"+signal+"</td></tr>";
   });
   html+="</tbody></table>";
@@ -1126,7 +1225,12 @@ function renderHistoryTab(){
 
   // Signal log
   var logHtml="";
-  WK_CHANGES.slice().reverse().slice(0,15).forEach(function(w){
+  var logLimit=15;
+  if(NL_SERIES.referenceDate&&!NL_SERIES.referenceComplete){
+    logLimit=14;
+    logHtml+='<div style="margin-bottom:.3rem;padding:.25rem .4rem;border-left:2px solid var(--t3)">⚪ '+shortDate(NL_SERIES.referenceDate)+' → — → <span style="color:var(--t3);font-weight:600">NO DATA</span></div>';
+  }
+  WK_CHANGES.slice().reverse().slice(0,logLimit).forEach(function(w){
     var signal=w.pct>=2?"RISK-ON":w.pct<=-2?"RISK-OFF":"NEUTRAL";
     var color=signal==="RISK-ON"?"var(--green)":signal==="RISK-OFF"?"var(--red)":"var(--t3)";
     var icon=signal==="RISK-ON"?"🟢":signal==="RISK-OFF"?"🔴":"⚪";
