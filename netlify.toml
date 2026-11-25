@@ -1,4 +1,11 @@
-# Netlify configuration — FRED API proxy
+# Netlify configuration — H.8 / H.15 still use the FRED proxy (server-side key).
+# The H.4.1 panel (t388u) reads a public JSON from GitHub raw, so data commits
+# must not trigger a production deploy (15 credits each).
+[build]
+  publish = "."
+  command = ""
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- '*.html' '*.js' 'netlify/**' netlify.toml"
+
 # Routes /fred-proxy/* through a serverless function that resolves CORS
 # AND injects the api_key server-side (from env var FRED_API_KEY).
 # The key never appears in the repo or in the client.
