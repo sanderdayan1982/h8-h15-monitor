@@ -336,7 +336,7 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
   </div>
 </div>
 
-<footer class="footer">Source: Federal Reserve H.4.1 via FRED API (serverless proxy) · v2.1 (units fix 07-oct-2026)<br>Net Liquidity = WALCL − WTREGEN − RRPONTTLD (units normalized to $M) · Release: Thursdays 16:30 ET (22:30 WAT)</footer>
+<footer class="footer">Source: Federal Reserve H.4.1 via public JSON (GitHub raw, no API key in the page) · v2.2 (t389u)<br>Net Liquidity = WALCL − WTREGEN − RRPONTTLD (units normalized to $M) · Release: Thursdays 16:30 ET (22:30 WAT)</footer>
 
 <button class="log-toggle" onclick="document.getElementById('logP').classList.toggle('show')">📋 Log</button>
 <div class="log-panel" id="logP"></div>
@@ -349,9 +349,9 @@ body{font-family:'IBM Plex Sans Condensed',system-ui,sans-serif;background:var(-
 var logEl=document.getElementById("logP");
 function log(msg,cls){var d=new Date().toLocaleTimeString();logEl.innerHTML+='<div class="'+(cls||"")+'">['+ d+'] '+msg+'</div>';console.log("[H41]",msg);}
 
-// ──── FRED API ────
-var FRED_KEY = ""; // v2.0 AUDIT FIX C1: key injected server-side by Netlify /fred-proxy — never in client
-var FRED_BASE = "/fred-proxy/series/observations"; // v2.0 AUDIT FIX C1: serverless proxy (same-origin, no CORS, no public proxies)
+// ──── H.4.1 public JSON (t389u): no API key in the page ────
+var H41_JSON_URL = "https://raw.githubusercontent.com/sanderdayan1982/h8-h15-monitor/main/data/h41_liquidity.json";
+var H41_LAST_KEY = "g8-h41-last-generated-at";
 
 var chartInstances = [];
 function destroyCharts(){chartInstances.forEach(function(c){try{c.destroy();}catch(e){}});chartInstances=[];}
@@ -437,28 +437,60 @@ async function tryFetch(url, timeout){
 
 var failedSeries = [];
 
-/* v2.0 AUDIT FIX C1+C2: single same-origin proxy endpoint, no public CORS proxies,
-   3 attempts with 2s/4s backoff. Key appended only if FRED_KEY is non-empty (local dev). */
-async function fetchFRED(seriesId, startDate, trackFailure){
-  var url = FRED_BASE+"?series_id="+seriesId+"&file_type=json&sort_order=asc";
-  if(FRED_KEY) url += "&api_key="+FRED_KEY;
-  if(startDate) url += "&observation_start="+startDate;
+function formatWat(iso){
+  if(!iso) return "sin hora de último dato";
+  var d=new Date(iso);
+  if(isNaN(d.getTime())) return "sin hora de último dato";
+  var opts={timeZone:"Africa/Malabo",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false};
+  return d.toLocaleString("en-GB",opts)+" WAT";
+}
+function formatFuenteNoResponde(lastIso){
+  return "Fuente no responde · último dato: "+formatWat(lastIso);
+}
+function readLastGeneratedAt(){
+  try{return sessionStorage.getItem(H41_LAST_KEY)||"";}catch(e){return "";}
+}
+function writeLastGeneratedAt(iso){
+  try{if(iso) sessionStorage.setItem(H41_LAST_KEY,iso);}catch(e){}
+}
+function showFuenteNoResponde(box){
+  var last=readLastGeneratedAt();
+  box.innerHTML="<strong>"+formatFuenteNoResponde(last)+"</strong>";
+  box.classList.add("show");
+}
 
+/* t389u: the page reads only the public JSON. No FRED key, no proxy, no client API call. */
+async function fetchH41Json(){
+  var lastErr=null;
   for(var attempt=0; attempt<3; attempt++){
     try{
-      var json = await tryFetch(url, 30000);
-      if(json.error_message) throw new Error(json.error_message);
-      var obs = (json.observations||[]).filter(function(o){return o.value!=="."&&!isNaN(parseFloat(o.value));});
-      log("  \u2713 "+seriesId+": "+obs.length+(attempt>0?" r"+attempt:""), "ok");
-      return obs.map(function(o){return{date:o.date, value:parseFloat(o.value)};});
+      var json=await tryFetch(H41_JSON_URL, 30000);
+      if(!json||json.schema!=="g8-h41-liquidity-v1"||!json.series) throw new Error("JSON inválido");
+      log("  \u2713 h41_liquidity as_of="+(json.as_of||"?")+(attempt>0?" r"+attempt:""), "ok");
+      return json;
     }catch(e){
-      log("  \u26a0 "+seriesId+" #"+(attempt+1)+": "+e.message, "warn");
+      lastErr=e;
+      log("  \u26a0 JSON #"+(attempt+1)+": "+e.message, "warn");
       if(attempt<2) await delay(2000*(attempt+1));
     }
   }
-  log("  \u2717 "+seriesId+": FAILED", "fail");
-  if(trackFailure!==false) failedSeries.push(seriesId);
-  return [];
+  throw lastErr||new Error("Fuente no responde");
+}
+
+function applyH41Json(json, tickers, UNITS){
+  var series=json.series||{};
+  tickers.forEach(function(k){
+    var sid=TICKERS[k];
+    var rows=((series[sid]||{}).observations)||[];
+    var arr=rows.filter(function(o){return o&&o.value!=="."&&!isNaN(parseFloat(o.value));})
+      .map(function(o){return{date:o.date,value:parseFloat(o.value)};});
+    var f=UNITS[k];
+    DATA[k]=(f===1)?arr:arr.map(function(o){return{date:o.date,value:o.value*f};});
+    if(!arr.length) failedSeries.push(sid);
+  });
+  var cRows=((series.WMTSECL1||{}).observations)||[];
+  DATA.WMTSECL1=cRows.filter(function(o){return o&&o.value!=="."&&!isNaN(parseFloat(o.value));})
+    .map(function(o){return{date:o.date,value:parseFloat(o.value)};});
 }
 
 function startDateStr(){
@@ -468,8 +500,8 @@ function startDateStr(){
 
 function showFileProtocolHelp(){
   var box = document.getElementById("errBox");
-  box.innerHTML = '<strong>\u26a0 This dashboard fetches FRED data through a same-origin serverless proxy.</strong><br>'+
-    'Open it from its deployed URL (Netlify) \u2014 it cannot load data from <code>file://</code> or other origins.';
+  box.innerHTML = '<strong>\u26a0 This dashboard reads a public JSON from GitHub.</strong><br>'+
+    'Open it from its deployed URL (Netlify) \u2014 it cannot load data from <code>file://</code>.';
   box.classList.add("show");
 }
 
@@ -483,26 +515,18 @@ async function loadAllData(isRefresh){
 
   try{
     log(isRefresh?"Auto-refresh triggered…":"Initial data load… "+(IS_FILE?"(file:// detected)":"(http)"));
-    var sd=startDateStr();
 
-    // v2.0 AUDIT FIX C2: all 9 series in PARALLEL (was sequential + 1.5s delays = 25-45s)
-    var tickers=["WALCL","WTREGEN","RRPONTTLD","WRESBAL","TREAST","MBST","PRIMARYCR","SOFR","IORB"];
     // v2.1 FIX (07-oct-2026): FRED publishes WALCL, WTREGEN, WRESBAL, TREAST, WSHOMCB and WLCFLPCL in $Millions;
     // only RRPONTTLD is in $Billions. v2.0 multiplied WTREGEN/WRESBAL by 1000, which inflated TGA and reserves
     // 1000x and broke Net Liquidity. Same factors as mesa-macro-fx ingest/providers_usd.py (UNITS_TO_M,
     // verified against the FRED series pages). Everything is normalized to $Millions.
+    var tickers=["WALCL","WTREGEN","RRPONTTLD","WRESBAL","TREAST","MBST","PRIMARYCR","SOFR","IORB"];
     var UNITS={WALCL:1,WTREGEN:1,RRPONTTLD:1000,WRESBAL:1,TREAST:1,MBST:1,PRIMARYCR:1,SOFR:1,IORB:1};
     var ovTxt=document.getElementById("ovTxt");
-    if(ovTxt) ovTxt.textContent="Fetching 9 FRED series in parallel\u2026";
-    var custodyPromise=fetchFRED("WMTSECL1",sd,false);
-    var results=await Promise.allSettled(tickers.map(function(k){return fetchFRED(TICKERS[k],sd);}));
-    results.forEach(function(r,i){
-      var k=tickers[i];
-      var arr=(r.status==="fulfilled")?r.value:[];
-      var f=UNITS[k];
-      DATA[k]=(f===1)?arr:arr.map(function(o){return{date:o.date,value:o.value*f};});
-    });
-    DATA.WMTSECL1=await custodyPromise;
+    if(ovTxt) ovTxt.textContent="Reading public H.4.1 JSON\u2026";
+    var bundle=await fetchH41Json();
+    applyH41Json(bundle,tickers,UNITS);
+    if(bundle.generated_at) writeLastGeneratedAt(bundle.generated_at);
     renderCustodyContext();
 
     var totalObs=0;
@@ -534,8 +558,8 @@ async function loadAllData(isRefresh){
     log(isRefresh?"Refresh complete ✓":"Dashboard ready ✓","ok");
   }catch(e){
     console.error(e);log("ERROR: "+e.message,"fail");
-    sDot.className="dot err";sTxt.textContent="Error";
-    errBox.innerHTML="<strong>Error:</strong> "+e.message;errBox.classList.add("show");
+    sDot.className="dot err";sTxt.textContent="Fuente no responde";
+    showFuenteNoResponde(errBox);
   }
 }
 

@@ -150,6 +150,13 @@ test("el panel no altera tickers, umbrales ni el contrato 9/9; la custodia queda
   assert.equal(alerts.includes("WMTSECL1"), false);
   assert.equal(alerts.includes("CUSTODY_DRAIN"), false);
   assert.match(html, /id="custodyContext"/);
-  assert.match(html, /fetchFRED\("WMTSECL1",sd,false\)/);
+  // orden Sander 25-nov t389u: H.4.1 lee el JSON del VPS, sin clave en el navegador
+  assert.match(html, /applyH41Json\(/);
+  assert.match(html, /DATA\.WMTSECL1/);
+  assert.match(html, /h41_liquidity\.json/);
+  assert.doesNotMatch(html, /FRED_KEY\s*=/);
+  assert.doesNotMatch(html, /api_key=/);
+  assert.doesNotMatch(html, /fetchFRED\(/);
+
   assert.match(html, /src="\/custody_context\.js"/);
 });
