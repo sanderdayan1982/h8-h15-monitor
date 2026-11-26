@@ -1,0 +1,8 @@
+# t392u: ajustes para el proyecto Netlify sander2-h41-liquidity-command-center.
+# Base directory = drop-redirect. Así no publica el index de H.8/H.15
+# y no comparte el netlify.toml de la raíz (evita duplicar créditos).
+[build]
+  publish = "."
+  command = ""
+  # Solo publica si cambia esta carpeta. El resto de commits no gasta créditos.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ."
